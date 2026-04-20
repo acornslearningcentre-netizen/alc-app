@@ -26,9 +26,10 @@ dist-ssr
 # Railway
 .railway/
 
-# Local SQLite for review-guide feedback (Railway uses a /data volume)
-data/
-data-test/
+# Local SQLite for review-guide feedback (Railway uses a /data volume).
+# Patterns are root-anchored — an unanchored `data/` would also match `src/data/`.
+/data/
+/data-test/
 *.db
 *.db-wal
 *.db-shm
