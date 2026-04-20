@@ -1,4 +1,5 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { useAppStore } from '../../store/app-store';
 import { CLICKABLE_AREAS, FEATURES } from './inventory';
 import {
   reviewApi,
@@ -155,6 +156,11 @@ function useHashRoute(): [boolean, (open: boolean) => void] {
 export const ReviewGuide: React.FC = () => {
   const [open, setOpen] = useHashRoute();
   const [tab, setTab] = useState<Tab>('areas');
+  // The launcher only appears on the homepage (login screen). The full-screen
+  // review page itself still renders anywhere when the URL hash is #review,
+  // so a bookmarked link works regardless of auth state.
+  const authed = useAppStore((s) => s.authed);
+  const showFab = !authed;
 
   useEffect(() => {
     document.body.classList.toggle('review-page-open', open);
@@ -173,7 +179,7 @@ export const ReviewGuide: React.FC = () => {
 
   return (
     <>
-      {!open && (
+      {!open && showFab && (
         <a
           href="#review"
           target="_blank"
