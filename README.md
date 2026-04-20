@@ -33,7 +33,7 @@ npm run start      # serve dist on $PORT (default 3000)
 
 ## Project structure
 
-```
+```text
 src/
 ├── styles/            Design tokens, base utilities, variant overrides
 ├── data/              Typed seed data (children, observations, passcodes)
