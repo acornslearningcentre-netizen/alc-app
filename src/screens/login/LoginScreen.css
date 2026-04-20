@@ -1,0 +1,103 @@
+/* LoginScreen responsive styles */
+
+.login-screen {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: 1.1fr 1fr;
+  background: var(--cream);
+}
+
+.login-brand-panel {
+  padding: 60px 64px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  background: linear-gradient(180deg, #EFE8D7 0%, #F6F1E6 60%);
+  position: relative;
+  overflow: hidden;
+}
+
+.login-form-panel {
+  padding: 64px;
+  display: flex;
+  flex-direction: column;
+  background: var(--paper);
+}
+
+/* Mobile brand logo — hidden on desktop */
+.login-mobile-brand {
+  display: none;
+}
+
+/* Passcode input row */
+.passcode-row {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+}
+
+.passcode-input {
+  width: 64px;
+  height: 78px;
+  font-size: 34px;
+  font-weight: 800;
+  text-align: center;
+  border-radius: 16px;
+  background: var(--paper);
+  font-family: inherit;
+  text-transform: uppercase;
+  color: var(--ink);
+}
+
+/* ── TABLET (≤960px) ── */
+@media (max-width: 960px) {
+  .login-screen {
+    grid-template-columns: 1fr;
+  }
+
+  /* Stack: form first, brand panel below on tablet */
+  .login-brand-panel {
+    order: 2;
+    padding: 40px 40px;
+  }
+
+  .login-brand-panel > div:first-child {
+    /* Hide the decorative logo — the one in the form panel covers it */
+    display: none;
+  }
+
+  .login-form-panel {
+    order: 1;
+    padding: 40px 40px;
+  }
+}
+
+/* ── MOBILE (≤640px) ── */
+@media (max-width: 640px) {
+  .login-screen {
+    grid-template-columns: 1fr;
+  }
+
+  /* On mobile, hide brand panel entirely; show logo in form panel */
+  .login-brand-panel {
+    display: none;
+  }
+
+  .login-mobile-brand {
+    display: block;
+    margin-bottom: 24px;
+  }
+
+  .login-form-panel {
+    padding: 24px 20px 40px;
+    min-height: 100vh;
+  }
+
+  /* Smaller passcode inputs on mobile */
+  .passcode-input {
+    width: 52px;
+    height: 64px;
+    font-size: 26px;
+    border-radius: 12px;
+  }
+}

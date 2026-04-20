@@ -1,0 +1,5 @@
+/* Acorns App — Playful variant overrides */
+body.variant-playful .card { border-radius: 24px; }
+body.variant-playful .nav-item.active { background: var(--ochre); color: var(--ink); }
+body.variant-playful .btn.primary { background: var(--plum); border-color: var(--plum); }
+body.variant-playful .chip { background: var(--ochre-soft); color: var(--ochre-ink); }
