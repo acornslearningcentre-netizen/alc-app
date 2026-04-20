@@ -2,7 +2,6 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useS
 import { CLICKABLE_AREAS, FEATURES } from './inventory';
 import {
   reviewApi,
-  type AreaFeedback,
   type FeatureFeedback,
   type FeatureRequest,
 } from './api';
@@ -190,127 +189,30 @@ const Tab: React.FC<{ active: boolean; onClick: () => void; label: string; hint:
 );
 
 // ────────────────────────────────────────────────────────────────────────────
-// Section: Clickable areas
+// Section: Clickable areas (read-only — feedback lives in "What it does")
 // ────────────────────────────────────────────────────────────────────────────
-const AreasSection: React.FC = () => {
-  const [notes, setNotes] = useState<AreaFeedback[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    reviewApi.listAreaFeedback()
-      .then(setNotes)
-      .catch((e) => setError(String(e)))
-      .finally(() => setLoading(false));
-  }, []);
-
-  const grouped = useMemo(() => {
-    const m = new Map<string, AreaFeedback[]>();
-    for (const n of notes) {
-      const arr = m.get(n.area_key) ?? [];
-      arr.push(n);
-      m.set(n.area_key, arr);
-    }
-    return m;
-  }, [notes]);
-
-  if (loading) return <div className="review-loading">Loading…</div>;
-
-  return (
-    <>
-      <p className="review-blurb">
-        Each row tells you what to click in the app and what should happen. Use
-        <strong> Write a note</strong> to leave feedback on that interaction.
-      </p>
-      {error && <div className="review-error">Couldn’t load notes: {error}</div>}
-      <ul className="review-cards">
-        {CLICKABLE_AREAS.map((a) => {
-          const key = areaKey(a);
-          const list = grouped.get(key) ?? [];
-          return (
-            <AreaCard
-              key={key}
-              area={a}
-              notes={list}
-              onCreate={(n) => setNotes((prev) => [n, ...prev])}
-              onUpdate={(n) => setNotes((prev) => prev.map((x) => (x.id === n.id ? n : x)))}
-              onDelete={(id) => setNotes((prev) => prev.filter((x) => x.id !== id))}
-            />
-          );
-        })}
-      </ul>
-    </>
-  );
-};
-
-const AreaCard: React.FC<{
-  area: { role: string; screen: string; element: string; observable: string };
-  notes: AreaFeedback[];
-  onCreate: (n: AreaFeedback) => void;
-  onUpdate: (n: AreaFeedback) => void;
-  onDelete: (id: number) => void;
-}> = ({ area, notes, onCreate, onUpdate, onDelete }) => {
-  const [showForm, setShowForm] = useState(false);
-
-  return (
-    <li className="review-card">
-      <div className="review-card-head">
-        <div className="review-card-tags">
-          <span className={`pill role-${area.role}`}>{area.role}</span>
-          <span className="pill screen">{area.screen}</span>
-        </div>
-        <h3 className="review-card-title">{area.element}</h3>
-        <p className="review-card-sub">{area.observable}</p>
-      </div>
-
-      {notes.length > 0 && (
-        <ul className="review-notes">
-          {notes.map((n) => (
-            <NoteItem
-              key={n.id}
-              note={n}
-              onSave={async (b) => {
-                const updated = await reviewApi.updateAreaFeedback(n.id, b);
-                onUpdate(updated);
-              }}
-              onDelete={async () => {
-                await reviewApi.deleteAreaFeedback(n.id);
-                onDelete(n.id);
-              }}
-            />
-          ))}
-        </ul>
-      )}
-
-      {showForm ? (
-        <NoteForm
-          placeholder={`What did you notice about “${area.element}”?`}
-          submitLabel="Save my note"
-          onCancel={() => setShowForm(false)}
-          onSubmit={async (b) => {
-            const saved = await reviewApi.addAreaFeedback({
-              area_key: areaKey(area),
-              area_label: `${area.screen} · ${area.element}`,
-              comment: b.comment,
-              author: b.author,
-              role: area.role,
-            });
-            onCreate(saved);
-            setShowForm(false);
-          }}
-        />
-      ) : (
-        <button
-          type="button"
-          className="btn primary review-add-btn"
-          onClick={() => setShowForm(true)}
-        >
-          ✏️ Write a note{notes.length ? ` (${notes.length} saved)` : ''}
-        </button>
-      )}
-    </li>
-  );
-};
+const AreasSection: React.FC = () => (
+  <>
+    <p className="review-blurb">
+      Each card tells you what to click in the app and what should happen. To
+      leave feedback, switch to <strong>What it does</strong>.
+    </p>
+    <ul className="review-cards">
+      {CLICKABLE_AREAS.map((a) => (
+        <li key={areaKey(a)} className="review-card">
+          <div className="review-card-head">
+            <div className="review-card-tags">
+              <span className={`pill role-${a.role}`}>{a.role}</span>
+              <span className="pill screen">{a.screen}</span>
+            </div>
+            <h3 className="review-card-title">{a.element}</h3>
+            <p className="review-card-sub">{a.observable}</p>
+          </div>
+        </li>
+      ))}
+    </ul>
+  </>
+);
 
 // ────────────────────────────────────────────────────────────────────────────
 // Section: Features
