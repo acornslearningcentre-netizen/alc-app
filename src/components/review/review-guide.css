@@ -18,7 +18,13 @@
   box-shadow: 0 6px 18px rgba(0, 0, 0, 0.18);
   cursor: pointer;
   letter-spacing: 0.01em;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  text-decoration: none;
 }
+.review-guide-fab:hover { color: var(--cream); }
+.review-guide-fab:visited { color: var(--cream); }
 .review-guide-fab::before { content: "📣 "; }
 .review-guide-fab:hover { transform: translateY(-1px); }
 .review-guide-fab:focus-visible { outline: 3px solid var(--ochre); outline-offset: 2px; }

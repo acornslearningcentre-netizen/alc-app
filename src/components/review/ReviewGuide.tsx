@@ -158,17 +158,30 @@ export const ReviewGuide: React.FC = () => {
     return () => document.body.classList.remove('review-page-open');
   }, [open]);
 
+  // Open the review page in a new browser tab so reviewers can keep the demo
+  // visible on one screen while leaving notes on another. Falls back to the
+  // current tab if the popup is blocked.
+  const openInNewTab = (e: React.MouseEvent) => {
+    e.preventDefault();
+    const url = `${window.location.pathname}${window.location.search}#review`;
+    const win = window.open(url, '_blank', 'noopener');
+    if (!win) setOpen(true);
+  };
+
   return (
     <>
       {!open && (
-        <button
-          type="button"
+        <a
+          href="#review"
+          target="_blank"
+          rel="noopener"
           className="review-guide-fab"
-          onClick={() => setOpen(true)}
-          aria-label="Open the reviewer guide"
+          onClick={openInNewTab}
+          aria-label="Open the reviewer guide in a new tab"
+          title="Opens in a new tab so you can use it on a second screen"
         >
-          Review guide
-        </button>
+          Review guide ↗
+        </a>
       )}
 
       {open && (
