@@ -32,6 +32,7 @@ db.exec(`
     comment TEXT NOT NULL,
     author TEXT,
     role TEXT,
+    priority TEXT,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
   CREATE TABLE IF NOT EXISTS requests (
@@ -39,10 +40,21 @@ db.exec(`
     feature TEXT NOT NULL,
     description TEXT NOT NULL,
     author TEXT,
+    priority TEXT,
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
 `);
+
+// Idempotent migrations for databases created before priority existed.
+const ensureColumn = (table, column, decl) => {
+  const cols = db.prepare(`PRAGMA table_info(${table})`).all();
+  if (!cols.some((c) => c.name === column)) {
+    db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${decl}`);
+  }
+};
+ensureColumn('feature_feedback', 'priority', 'TEXT');
+ensureColumn('requests', 'priority', 'TEXT');
 
 const app = express();
 app.use(express.json({ limit: '64kb' }));
@@ -50,6 +62,8 @@ app.use(express.json({ limit: '64kb' }));
 // ── API ──────────────────────────────────────────────────────────────────────
 const trim = (v) => (typeof v === 'string' ? v.trim() : '');
 const optional = (v) => (trim(v) || null);
+const PRIORITIES = new Set(['important', 'nice', 'v2']);
+const cleanPriority = (v) => (PRIORITIES.has(trim(v)) ? trim(v) : null);
 
 const idParam = (req, res) => {
   const id = Number(req.params.id);
@@ -96,23 +110,26 @@ app.get('/api/review/feature-feedback', (_req, res) => {
   res.json(db.prepare('SELECT * FROM feature_feedback ORDER BY created_at DESC').all());
 });
 app.post('/api/review/feature-feedback', (req, res) => {
-  const { feature_key, feature_label, comment, author, role } = req.body ?? {};
+  const { feature_key, feature_label, comment, author, role, priority } = req.body ?? {};
   if (!trim(feature_key) || !trim(feature_label) || !trim(comment)) {
     return res.status(400).json({ error: 'feature_key, feature_label, and comment are required' });
   }
   const info = db.prepare(
-    'INSERT INTO feature_feedback (feature_key, feature_label, comment, author, role) VALUES (?, ?, ?, ?, ?)'
-  ).run(trim(feature_key), trim(feature_label), trim(comment), optional(author), optional(role));
+    'INSERT INTO feature_feedback (feature_key, feature_label, comment, author, role, priority) VALUES (?, ?, ?, ?, ?, ?)'
+  ).run(
+    trim(feature_key), trim(feature_label), trim(comment),
+    optional(author), optional(role), cleanPriority(priority)
+  );
   res.status(201).json(db.prepare('SELECT * FROM feature_feedback WHERE id = ?').get(info.lastInsertRowid));
 });
 app.put('/api/review/feature-feedback/:id', (req, res) => {
   const id = idParam(req, res); if (!id) return;
-  const { comment, author } = req.body ?? {};
+  const { comment, author, priority } = req.body ?? {};
   if (!trim(comment)) return res.status(400).json({ error: 'comment is required' });
   const existing = db.prepare('SELECT id FROM feature_feedback WHERE id = ?').get(id);
   if (!existing) return res.status(404).json({ error: 'not found' });
-  db.prepare('UPDATE feature_feedback SET comment = ?, author = ? WHERE id = ?').run(
-    trim(comment), optional(author), id
+  db.prepare('UPDATE feature_feedback SET comment = ?, author = ?, priority = ? WHERE id = ?').run(
+    trim(comment), optional(author), cleanPriority(priority), id
   );
   res.json(db.prepare('SELECT * FROM feature_feedback WHERE id = ?').get(id));
 });
@@ -127,26 +144,26 @@ app.get('/api/review/requests', (_req, res) => {
   res.json(db.prepare('SELECT * FROM requests ORDER BY created_at DESC').all());
 });
 app.post('/api/review/requests', (req, res) => {
-  const { feature, description, author } = req.body ?? {};
+  const { feature, description, author, priority } = req.body ?? {};
   if (!trim(feature) || !trim(description)) {
     return res.status(400).json({ error: 'feature and description are required' });
   }
   const info = db.prepare(
-    'INSERT INTO requests (feature, description, author) VALUES (?, ?, ?)'
-  ).run(trim(feature), trim(description), optional(author));
+    'INSERT INTO requests (feature, description, author, priority) VALUES (?, ?, ?, ?)'
+  ).run(trim(feature), trim(description), optional(author), cleanPriority(priority));
   res.status(201).json(db.prepare('SELECT * FROM requests WHERE id = ?').get(info.lastInsertRowid));
 });
 app.put('/api/review/requests/:id', (req, res) => {
   const id = idParam(req, res); if (!id) return;
-  const { feature, description, author } = req.body ?? {};
+  const { feature, description, author, priority } = req.body ?? {};
   if (!trim(feature) || !trim(description)) {
     return res.status(400).json({ error: 'feature and description are required' });
   }
   const existing = db.prepare('SELECT id FROM requests WHERE id = ?').get(id);
   if (!existing) return res.status(404).json({ error: 'not found' });
   db.prepare(
-    "UPDATE requests SET feature = ?, description = ?, author = ?, updated_at = datetime('now') WHERE id = ?"
-  ).run(trim(feature), trim(description), optional(author), id);
+    "UPDATE requests SET feature = ?, description = ?, author = ?, priority = ?, updated_at = datetime('now') WHERE id = ?"
+  ).run(trim(feature), trim(description), optional(author), cleanPriority(priority), id);
   res.json(db.prepare('SELECT * FROM requests WHERE id = ?').get(id));
 });
 app.delete('/api/review/requests/:id', (req, res) => {

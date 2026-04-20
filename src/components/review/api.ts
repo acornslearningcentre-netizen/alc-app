@@ -10,6 +10,8 @@ export interface AreaFeedback {
   created_at: string;
 }
 
+export type Priority = 'important' | 'nice' | 'v2';
+
 export interface FeatureFeedback {
   id: number;
   feature_key: string;
@@ -17,6 +19,7 @@ export interface FeatureFeedback {
   comment: string;
   author: string | null;
   role: string | null;
+  priority: Priority | null;
   created_at: string;
 }
 
@@ -25,9 +28,22 @@ export interface FeatureRequest {
   feature: string;
   description: string;
   author: string | null;
+  priority: Priority | null;
   created_at: string;
   updated_at: string;
 }
+
+export const PRIORITY_OPTIONS: { value: Priority; label: string; emoji: string }[] = [
+  { value: 'important', label: 'Important', emoji: '🔴' },
+  { value: 'nice', label: 'Nice to have', emoji: '🟡' },
+  { value: 'v2', label: 'Save for v2', emoji: '🔵' },
+];
+
+export const PRIORITY_META: Record<Priority, { label: string; emoji: string }> = {
+  important: { label: 'Important', emoji: '🔴' },
+  nice: { label: 'Nice to have', emoji: '🟡' },
+  v2: { label: 'Save for v2', emoji: '🔵' },
+};
 
 async function http<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, {
@@ -54,18 +70,18 @@ export const reviewApi = {
 
   // Feature feedback
   listFeatureFeedback: () => http<FeatureFeedback[]>('/api/review/feature-feedback'),
-  addFeatureFeedback: (b: { feature_key: string; feature_label: string; comment: string; author?: string; role?: string }) =>
+  addFeatureFeedback: (b: { feature_key: string; feature_label: string; comment: string; author?: string; role?: string; priority?: Priority | null }) =>
     http<FeatureFeedback>('/api/review/feature-feedback', { method: 'POST', body: JSON.stringify(b) }),
-  updateFeatureFeedback: (id: number, b: { comment: string; author?: string }) =>
+  updateFeatureFeedback: (id: number, b: { comment: string; author?: string; priority?: Priority | null }) =>
     http<FeatureFeedback>(`/api/review/feature-feedback/${id}`, { method: 'PUT', body: JSON.stringify(b) }),
   deleteFeatureFeedback: (id: number) =>
     http<void>(`/api/review/feature-feedback/${id}`, { method: 'DELETE' }),
 
   // Requests
   listRequests: () => http<FeatureRequest[]>('/api/review/requests'),
-  addRequest: (b: { feature: string; description: string; author?: string }) =>
+  addRequest: (b: { feature: string; description: string; author?: string; priority?: Priority | null }) =>
     http<FeatureRequest>('/api/review/requests', { method: 'POST', body: JSON.stringify(b) }),
-  updateRequest: (id: number, b: { feature: string; description: string; author?: string }) =>
+  updateRequest: (id: number, b: { feature: string; description: string; author?: string; priority?: Priority | null }) =>
     http<FeatureRequest>(`/api/review/requests/${id}`, { method: 'PUT', body: JSON.stringify(b) }),
   deleteRequest: (id: number) =>
     http<void>(`/api/review/requests/${id}`, { method: 'DELETE' }),

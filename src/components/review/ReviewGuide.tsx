@@ -2,8 +2,11 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useS
 import { CLICKABLE_AREAS, FEATURES } from './inventory';
 import {
   reviewApi,
+  PRIORITY_OPTIONS,
+  PRIORITY_META,
   type FeatureFeedback,
   type FeatureRequest,
+  type Priority,
 } from './api';
 
 type Tab = 'areas' | 'features' | 'requests';
@@ -201,8 +204,8 @@ export const ReviewGuide: React.FC = () => {
           </header>
 
           <nav className="review-tabs" role="tablist" aria-label="Sections">
-            <Tab active={tab === 'areas'} onClick={() => setTab('areas')} label="What to click" hint="Areas you can tap on" />
-            <Tab active={tab === 'features'} onClick={() => setTab('features')} label="What it does" hint="Each screen explained" />
+            <Tab active={tab === 'areas'} onClick={() => setTab('areas')} label="Try these clicks" hint="Interactions that work in this prototype" />
+            <Tab active={tab === 'features'} onClick={() => setTab('features')} label="What's in this prototype" hint="Each screen, with feedback" />
             <Tab active={tab === 'requests'} onClick={() => setTab('requests')} label="Your ideas" hint="Suggest something new" />
           </nav>
 
@@ -238,7 +241,7 @@ const Tab: React.FC<{ active: boolean; onClick: () => void; label: string; hint:
 );
 
 // ────────────────────────────────────────────────────────────────────────────
-// Section: Clickable areas (read-only — feedback lives in "What it does")
+// Section: Clickable areas (read-only — feedback lives in "What's in this prototype")
 // ────────────────────────────────────────────────────────────────────────────
 const AreasSection: React.FC = () => {
   const counts = useMemo(() => {
@@ -255,7 +258,7 @@ const AreasSection: React.FC = () => {
     <>
       <p className="review-blurb">
         Pick a role to see only its clickable areas. To leave feedback, switch
-        to <strong>What it does</strong>.
+        to <strong>What's in this prototype</strong>.
       </p>
       <RoleFilter counts={counts} active={role} onChange={setRole} />
       <ul className="review-cards">
@@ -519,6 +522,9 @@ const RequestCard: React.FC<{
   return (
     <li className="review-card">
       <div className="review-card-head">
+        {request.priority && (
+          <div className="review-card-tags"><PriorityBadge priority={request.priority} /></div>
+        )}
         <h3 className="review-card-title">{request.feature}</h3>
         <p className="review-card-sub multiline">{request.description}</p>
         <div className="review-card-meta">
@@ -542,8 +548,8 @@ const RequestCard: React.FC<{
 // Reusable bits
 // ────────────────────────────────────────────────────────────────────────────
 const NoteItem: React.FC<{
-  note: { id: number; comment: string; author: string | null; created_at: string };
-  onSave: (b: { comment: string; author?: string }) => Promise<void>;
+  note: { id: number; comment: string; author: string | null; created_at: string; priority: Priority | null };
+  onSave: (b: { comment: string; author?: string; priority?: Priority | null }) => Promise<void>;
   onDelete: () => Promise<void>;
 }> = ({ note, onSave, onDelete }) => {
   const [editing, setEditing] = useState(false);
@@ -554,7 +560,7 @@ const NoteItem: React.FC<{
     return (
       <li className="review-note editing">
         <NoteForm
-          initial={{ comment: note.comment, author: note.author ?? '' }}
+          initial={{ comment: note.comment, author: note.author ?? '', priority: note.priority }}
           submitLabel="Save changes"
           placeholder=""
           onCancel={() => setEditing(false)}
@@ -582,6 +588,9 @@ const NoteItem: React.FC<{
 
   return (
     <li className="review-note">
+      {note.priority && (
+        <div className="review-note-priority"><PriorityBadge priority={note.priority} /></div>
+      )}
       <div className="review-note-body">{note.comment}</div>
       <div className="review-note-meta">
         <span>
@@ -602,14 +611,15 @@ const NoteItem: React.FC<{
 };
 
 const NoteForm: React.FC<{
-  initial?: { comment: string; author: string };
+  initial?: { comment: string; author: string; priority: Priority | null };
   placeholder: string;
   submitLabel: string;
   onCancel: () => void;
-  onSubmit: (b: { comment: string; author?: string }) => Promise<void>;
+  onSubmit: (b: { comment: string; author?: string; priority?: Priority | null }) => Promise<void>;
 }> = ({ initial, placeholder, submitLabel, onCancel, onSubmit }) => {
   const [author, setAuthor] = useState(initial?.author ?? '');
   const [comment, setComment] = useState(initial?.comment ?? '');
+  const [priority, setPriority] = useState<Priority | ''>(initial?.priority ?? '');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -619,7 +629,11 @@ const NoteForm: React.FC<{
     setBusy(true);
     setErr(null);
     try {
-      await onSubmit({ comment: comment.trim(), author: author.trim() || undefined });
+      await onSubmit({
+        comment: comment.trim(),
+        author: author.trim() || undefined,
+        priority: priority || null,
+      });
     } catch (e) {
       setErr(String(e));
       setBusy(false);
@@ -636,6 +650,10 @@ const NoteForm: React.FC<{
           onChange={(e) => setAuthor(e.target.value)}
           placeholder="e.g. Sam"
         />
+      </label>
+      <label className="review-form-row">
+        <span>How important is this?</span>
+        <PrioritySelect value={priority} onChange={setPriority} />
       </label>
       <label className="review-form-row">
         <span>Your note</span>
@@ -661,15 +679,44 @@ const NoteForm: React.FC<{
   );
 };
 
+const PrioritySelect: React.FC<{
+  value: Priority | '';
+  onChange: (v: Priority | '') => void;
+}> = ({ value, onChange }) => (
+  <select
+    className="review-priority-select"
+    value={value}
+    onChange={(e) => onChange(e.target.value as Priority | '')}
+  >
+    <option value="">No priority — just sharing a thought</option>
+    {PRIORITY_OPTIONS.map((o) => (
+      <option key={o.value} value={o.value}>
+        {o.emoji}  {o.label}
+      </option>
+    ))}
+  </select>
+);
+
+const PriorityBadge: React.FC<{ priority: Priority | null }> = ({ priority }) => {
+  if (!priority) return null;
+  const meta = PRIORITY_META[priority];
+  return (
+    <span className={`review-priority-badge prio-${priority}`}>
+      {meta.emoji} {meta.label}
+    </span>
+  );
+};
+
 const RequestForm: React.FC<{
   initial?: FeatureRequest;
   submitLabel?: string;
   onCancel: () => void;
-  onSubmit: (b: { feature: string; description: string; author?: string }) => Promise<void>;
+  onSubmit: (b: { feature: string; description: string; author?: string; priority?: Priority | null }) => Promise<void>;
 }> = ({ initial, submitLabel = 'Save my idea', onCancel, onSubmit }) => {
   const [feature, setFeature] = useState(initial?.feature ?? '');
   const [description, setDescription] = useState(initial?.description ?? '');
   const [author, setAuthor] = useState(initial?.author ?? '');
+  const [priority, setPriority] = useState<Priority | ''>(initial?.priority ?? '');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -683,6 +730,7 @@ const RequestForm: React.FC<{
         feature: feature.trim(),
         description: description.trim(),
         author: author.trim() || undefined,
+        priority: priority || null,
       });
     } catch (e) {
       setErr(String(e));
@@ -702,6 +750,10 @@ const RequestForm: React.FC<{
           required
           autoFocus
         />
+      </label>
+      <label className="review-form-row">
+        <span>How important is this?</span>
+        <PrioritySelect value={priority} onChange={setPriority} />
       </label>
       <label className="review-form-row">
         <span>Tell us more</span>
