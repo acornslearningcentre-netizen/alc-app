@@ -8,6 +8,42 @@ import {
 
 type Tab = 'areas' | 'features' | 'requests';
 
+// Order roles deliberately: entry point first, then most-used to least-used.
+const ROLE_ORDER = ['login', 'teacher', 'parent', 'student', 'leader'] as const;
+const ROLE_LABEL: Record<string, string> = {
+  login: 'Login',
+  teacher: 'Teacher',
+  parent: 'Parent',
+  student: 'Student',
+  leader: 'Leader',
+};
+const DEFAULT_ROLE = 'teacher';
+
+const RoleFilter: React.FC<{
+  counts: Record<string, number>;
+  active: string;
+  onChange: (role: string) => void;
+}> = ({ counts, active, onChange }) => {
+  const visible = ROLE_ORDER.filter((r) => (counts[r] ?? 0) > 0);
+  return (
+    <div className="review-role-filter" role="tablist" aria-label="Filter by role">
+      {visible.map((r) => (
+        <button
+          key={r}
+          type="button"
+          role="tab"
+          aria-selected={r === active}
+          className={`review-role-chip pill role-${r}${r === active ? ' active' : ''}`}
+          onClick={() => onChange(r)}
+        >
+          {ROLE_LABEL[r] ?? r}
+          <span className="review-role-count">{counts[r]}</span>
+        </button>
+      ))}
+    </div>
+  );
+};
+
 // ── In-app confirm dialog ─────────────────────────────────────────────────
 interface ConfirmOptions {
   title: string;
@@ -191,28 +227,41 @@ const Tab: React.FC<{ active: boolean; onClick: () => void; label: string; hint:
 // ────────────────────────────────────────────────────────────────────────────
 // Section: Clickable areas (read-only — feedback lives in "What it does")
 // ────────────────────────────────────────────────────────────────────────────
-const AreasSection: React.FC = () => (
-  <>
-    <p className="review-blurb">
-      Each card tells you what to click in the app and what should happen. To
-      leave feedback, switch to <strong>What it does</strong>.
-    </p>
-    <ul className="review-cards">
-      {CLICKABLE_AREAS.map((a) => (
-        <li key={areaKey(a)} className="review-card">
-          <div className="review-card-head">
-            <div className="review-card-tags">
-              <span className={`pill role-${a.role}`}>{a.role}</span>
-              <span className="pill screen">{a.screen}</span>
+const AreasSection: React.FC = () => {
+  const counts = useMemo(() => {
+    const c: Record<string, number> = {};
+    for (const a of CLICKABLE_AREAS) c[a.role] = (c[a.role] ?? 0) + 1;
+    return c;
+  }, []);
+  const [role, setRole] = useState<string>(
+    () => (counts[DEFAULT_ROLE] ? DEFAULT_ROLE : ROLE_ORDER.find((r) => counts[r]) ?? DEFAULT_ROLE)
+  );
+  const items = CLICKABLE_AREAS.filter((a) => a.role === role);
+
+  return (
+    <>
+      <p className="review-blurb">
+        Pick a role to see only its clickable areas. To leave feedback, switch
+        to <strong>What it does</strong>.
+      </p>
+      <RoleFilter counts={counts} active={role} onChange={setRole} />
+      <ul className="review-cards">
+        {items.map((a) => (
+          <li key={areaKey(a)} className="review-card">
+            <div className="review-card-head">
+              <div className="review-card-tags">
+                <span className={`pill role-${a.role}`}>{a.role}</span>
+                <span className="pill screen">{a.screen}</span>
+              </div>
+              <h3 className="review-card-title">{a.element}</h3>
+              <p className="review-card-sub">{a.observable}</p>
             </div>
-            <h3 className="review-card-title">{a.element}</h3>
-            <p className="review-card-sub">{a.observable}</p>
-          </div>
-        </li>
-      ))}
-    </ul>
-  </>
-);
+          </li>
+        ))}
+      </ul>
+    </>
+  );
+};
 
 // ────────────────────────────────────────────────────────────────────────────
 // Section: Features
@@ -239,16 +288,29 @@ const FeaturesSection: React.FC = () => {
     return m;
   }, [notes]);
 
+  const counts = useMemo(() => {
+    const c: Record<string, number> = {};
+    for (const f of FEATURES) c[f.role] = (c[f.role] ?? 0) + 1;
+    return c;
+  }, []);
+  const [role, setRole] = useState<string>(
+    () => (counts[DEFAULT_ROLE] ? DEFAULT_ROLE : ROLE_ORDER.find((r) => counts[r]) ?? DEFAULT_ROLE)
+  );
+
   if (loading) return <div className="review-loading">Loading…</div>;
+
+  const items = FEATURES.filter((f) => f.role === role);
 
   return (
     <>
       <p className="review-blurb">
-        One row per screen. Use <strong>Suggest a change</strong> to share what you’d like adjusted.
+        Pick a role, then use <strong>Suggest a change</strong> on any screen
+        to share what you’d like adjusted.
       </p>
       {error && <div className="review-error">Couldn’t load suggestions: {error}</div>}
+      <RoleFilter counts={counts} active={role} onChange={setRole} />
       <ul className="review-cards">
-        {FEATURES.map((f) => {
+        {items.map((f) => {
           const key = featureKey(f);
           const list = grouped.get(key) ?? [];
           return (
