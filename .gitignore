@@ -25,3 +25,10 @@ dist-ssr
 
 # Railway
 .railway/
+
+# Local SQLite for review-guide feedback (Railway uses a /data volume)
+data/
+data-test/
+*.db
+*.db-wal
+*.db-shm

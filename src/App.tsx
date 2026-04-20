@@ -5,6 +5,7 @@ import { TeacherLayout } from './screens/teacher/TeacherLayout';
 import { ParentLayout } from './screens/parent/ParentLayout';
 import { StudentLayout } from './screens/student/StudentLayout';
 import { LeaderLayout } from './screens/leader/LeaderLayout';
+import { ReviewGuide } from './components/review/ReviewGuide';
 import type { Role } from './data/types';
 
 function App() {
@@ -30,7 +31,12 @@ function App() {
     }
   };
 
-  return authed ? renderRole() : <LoginScreen onLogin={handleLogin}/>;
+  return (
+    <>
+      {authed ? renderRole() : <LoginScreen onLogin={handleLogin}/>}
+      <ReviewGuide/>
+    </>
+  );
 }
 
 export default App;

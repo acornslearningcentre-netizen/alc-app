@@ -1,0 +1,245 @@
+/* Review Guide — floating launcher + modal with three reviewer-facing tables. */
+
+.review-guide-fab {
+  position: fixed;
+  left: 16px;
+  bottom: 16px;
+  z-index: 60;
+  padding: 10px 14px;
+  border-radius: 999px;
+  background: var(--ink);
+  color: var(--cream);
+  font-weight: 700;
+  font-size: 12.5px;
+  border: 1px solid var(--ink);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.18);
+  cursor: pointer;
+  letter-spacing: 0.01em;
+}
+.review-guide-fab:hover { transform: translateY(-1px); }
+.review-guide-fab:focus-visible { outline: 3px solid var(--ochre); outline-offset: 2px; }
+
+.review-guide-scrim {
+  position: fixed;
+  inset: 0;
+  background: rgba(20, 18, 14, 0.5);
+  z-index: 70;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+
+.review-guide-panel {
+  width: min(1080px, 100%);
+  max-height: calc(100vh - 48px);
+  background: var(--cream);
+  border-radius: 16px;
+  border: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.25);
+}
+
+.review-guide-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 18px 22px;
+  border-bottom: 1px solid var(--line);
+}
+.review-guide-header h2 { margin: 0; font-size: 18px; }
+.review-guide-header p { margin: 4px 0 0; color: var(--ink-2); font-size: 13px; }
+
+.review-guide-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--line);
+  background: var(--cream-2);
+}
+.review-guide-tab {
+  padding: 8px 14px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--ink-2);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.review-guide-tab:hover { background: var(--cream); }
+.review-guide-tab.active {
+  background: var(--ink);
+  color: var(--cream);
+  border-color: var(--ink);
+}
+
+.review-guide-body {
+  padding: 18px 22px 22px;
+  overflow-y: auto;
+}
+
+.review-guide-blurb {
+  margin: 0 0 14px;
+  color: var(--ink-2);
+  font-size: 13.5px;
+  line-height: 1.55;
+}
+
+.review-guide-table-wrap {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.review-guide-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.review-guide-table thead th {
+  text-align: left;
+  background: var(--cream-2);
+  padding: 10px 12px;
+  font-weight: 700;
+  color: var(--ink-2);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  border-bottom: 1px solid var(--line);
+}
+.review-guide-table tbody td {
+  padding: 10px 12px;
+  vertical-align: top;
+  border-bottom: 1px solid var(--line);
+  line-height: 1.5;
+}
+.review-guide-table tbody tr:last-child td { border-bottom: none; }
+.review-guide-table .strong { font-weight: 700; color: var(--ink); }
+.review-guide-table .muted { color: var(--ink-3); }
+.review-guide-table .nowrap { white-space: nowrap; }
+.review-guide-table .multiline { white-space: pre-wrap; }
+
+.review-guide-subrow td {
+  background: var(--cream-2);
+  padding: 14px 16px;
+}
+
+.review-guide-locked td { background: rgba(244, 240, 232, 0.4); }
+.review-guide-editing td { background: var(--ochre-soft); }
+
+.review-guide-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: var(--cream);
+  padding: 12px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+}
+.review-guide-new-request {
+  margin-top: 4px;
+  padding: 16px;
+}
+.review-guide-form-grid {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 8px;
+}
+.review-guide-form input,
+.review-guide-form textarea,
+.review-guide-editing input,
+.review-guide-editing textarea {
+  width: 100%;
+  padding: 9px 11px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--cream);
+  font-size: 13px;
+  font-family: inherit;
+  resize: vertical;
+}
+.review-guide-form-row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.review-guide-edit-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.review-guide-notes {
+  list-style: none;
+  margin: 0 0 10px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.review-guide-notes li {
+  background: var(--cream);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+.review-guide-note-meta { font-size: 11.5px; margin-bottom: 2px; }
+
+.review-guide-error {
+  background: rgba(180, 60, 50, 0.08);
+  color: #8a3026;
+  border: 1px solid rgba(180, 60, 50, 0.3);
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 12.5px;
+  margin-bottom: 12px;
+}
+.review-guide-error.inline {
+  background: transparent;
+  border: none;
+  padding: 0;
+  margin: 0;
+}
+
+/* Role pills — small coloured badges */
+.review-guide-table .pill {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: capitalize;
+  letter-spacing: 0.02em;
+  background: var(--cream-2);
+  color: var(--ink-2);
+  border: 1px solid var(--line);
+  white-space: nowrap;
+}
+.review-guide-table .pill.role-teacher { background: #e6efe5; color: #2f5f3a; border-color: #cadcc6; }
+.review-guide-table .pill.role-parent  { background: #f3e7d8; color: #7a5320; border-color: #e2cfa9; }
+.review-guide-table .pill.role-student { background: #e6e6f1; color: #443d77; border-color: #cdc9e2; }
+.review-guide-table .pill.role-leader  { background: #ecdfe7; color: #6b3a55; border-color: #d8c2cf; }
+.review-guide-table .pill.role-login   { background: #e1ebf0; color: #355168; border-color: #c5d6df; }
+
+.btn.small { padding: 5px 10px; font-size: 12px; }
+
+@media (max-width: 720px) {
+  .review-guide-scrim { padding: 0; }
+  .review-guide-panel { border-radius: 0; max-height: 100vh; height: 100vh; width: 100%; }
+  .review-guide-form-grid { grid-template-columns: 1fr; }
+  .review-guide-table { font-size: 12.5px; }
+  .review-guide-table thead { display: none; }
+  .review-guide-table tbody td { display: block; border-bottom: none; padding: 4px 12px; }
+  .review-guide-table tbody tr {
+    display: block;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .review-guide-fab { left: 12px; bottom: 12px; }
+}
