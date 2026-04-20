@@ -1,54 +1,64 @@
-# Acorns App
+# Acorns Learning Centre — alc-app
 
-A 4-role desktop education platform prototype for Acorns Learning Centre.
+Production React + TypeScript implementation of the Acorns Learning Centre prototype. A 4-role education platform (Teacher, Parent, Student, School Leader) with a calm, Montessori-inspired design system.
 
-## Tech Stack
+## Tech stack
 
-- Vite 5 + React 18 + TypeScript (strict)
-- Zustand (global state + localStorage persistence)
-- Plain CSS with custom properties (no Tailwind, no CSS-in-JS)
-- Google Fonts: Nunito + JetBrains Mono
+- **React 18** + **TypeScript** + **Vite 5**
+- **Zustand** for app state (role, variant, auth, active child)
+- **clsx** for class composition
+- Plain CSS with design tokens (`src/styles/tokens.css`) — no Tailwind, no CSS-in-JS
 
-## Getting Started
+## Local development
 
 ```bash
 npm install
-npm run dev
+npm run dev        # http://localhost:5173
 ```
 
-Then open [http://localhost:5173](http://localhost:5173)
+### Demo sign-in
 
-## Passcodes
+| Track | How | Passcode |
+| --- | --- | --- |
+| School (Teacher / Leader) | SSO buttons (mocked) | — |
+| Family → Parent | Passcode entry | `0000` → Priya Shah's family |
+| Family → Student | Passcode entry | `0000` → Amara Osei · `1111` → Mei Tanaka |
 
-| Role   | Passcode | Unlocks                                     |
-|--------|----------|---------------------------------------------|
-| Parent | A023     | Priya Shah (guardian: Ravi Shah)            |
-| Parent | B024     | Oscar Lindqvist (guardian: Freja Lindqvist) |
-
-## Roles
-
-| Role    | Login path       | Identity                    |
-|---------|------------------|-----------------------------|
-| Teacher | SSO / email link | Ms. Pereira, Acorns Primary |
-| Parent  | 4-char passcode  | Family view for one child   |
-| Student | Class code + PIN | Child learning space        |
-| Leader  | SSO + 2FA        | Dr. Okafor, Head Teacher    |
-
-Student demo: class code `ACO24`, pick any avatar, select 3 picture squares as PIN.
-
-## Role + Variant Switching (Designer QA)
-
-A tweaks panel is fixed at the bottom-right of every screen. Use it to:
-
-- Switch between Teacher / Parent / Student / Leader without logging out
-- Toggle Calm vs Playful visual variant
-
-State persists in localStorage: `alc.authed`, `alc.role`, `alc.variant`, `alc.parentChildId`.
-
-## Build
+## Build & preview
 
 ```bash
-npm run build
+npm run build      # tsc -b && vite build → dist/
+npm run start      # serve dist on $PORT (default 3000)
 ```
 
-Output in `dist/`. Bundle: ~300 KB JS, ~9 KB CSS (gzip: ~80 KB / ~3 KB).
+## Project structure
+
+```
+src/
+├── styles/            Design tokens, base utilities, variant overrides
+├── data/              Typed seed data (children, observations, passcodes)
+├── store/             Zustand store + localStorage persistence
+├── components/
+│   ├── ui/            Reusable primitives (Icon, BrandLogo, SignOutButton, Sparkline, …)
+│   └── layout/        ResponsiveAppShell (sidebar + mobile drawer)
+└── screens/
+    ├── login/         Track → role → passcode / SSO
+    ├── teacher/       Today · Children · Observe · Profile · Planning · Progress · Assistant · Messages
+    ├── parent/        Home · Messages · Assistant
+    ├── student/       Me · How I learn · Growing · Try today · My garden
+    └── leader/        Today · Cohorts · Teachers · Patterns · Outcomes
+```
+
+## Deployment (Railway)
+
+`railway.json` at the project root configures the Nixpacks build. After connecting the repo to Railway:
+
+```bash
+railway up         # or push to the linked GitHub branch for auto-deploy
+```
+
+Railway runs `npm ci && npm run build` during build, then `npm run start` (which serves `dist/` via `serve -s` so SPA routes fall back to `index.html`).
+
+## Design reference
+
+The original Claude Design handoff bundle is preserved at `design-reference/` (read-only — the source of truth for visual parity).
