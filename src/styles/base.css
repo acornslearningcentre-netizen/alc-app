@@ -431,6 +431,19 @@ body.drawer-open { overflow: hidden; }
   .cols-messages {
     grid-template-columns: 1fr;
   }
+  /* Messages: one-pane mobile flow. Default shows list, details hidden until a thread is tapped.
+     !important is required because .messages-detail / .messages-context carry inline display:flex,
+     which would otherwise outrank the media-query rule and leave both panes visible at once. */
+  .messages-grid[data-mobile-view="list"] > .messages-detail,
+  .messages-grid[data-mobile-view="list"] > .messages-context {
+    display: none !important;
+  }
+  .messages-grid[data-mobile-view="detail"] > :first-child {
+    display: none !important;
+  }
+  /* Back button is icon-only and flush-left on mobile */
+  .messages-back { display: inline-flex !important; align-items: center; justify-content: center; background: var(--cream-2); }
+  .messages-back:hover { background: var(--line); }
   .cols-leader {
     grid-template-columns: 1fr;
   }

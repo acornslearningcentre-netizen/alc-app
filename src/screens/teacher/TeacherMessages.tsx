@@ -113,12 +113,24 @@ export const TeacherMessages: React.FC<TeacherMessagesProps> = ({ initialGuardia
   const [draft, setDraft] = useState('');
   const [aiDraft, setAiDraft] = useState('');
   const [showAI, setShowAI] = useState(false);
+  /** On mobile we swap between the thread list and the selected conversation. */
+  const [mobileView, setMobileView] = useState<'list' | 'detail'>(
+    initialGuardianName ? 'detail' : 'list'
+  );
+
+  const selectThread = (id: string) => {
+    setActiveId(id);
+    setMobileView('detail');
+  };
 
   // When the user clicks "Message parent" for a different child, re-select that thread.
   useEffect(() => {
     if (!initialGuardianName) return;
     const match = threads.find(t => t.name === initialGuardianName);
-    if (match) setActiveId(match.id);
+    if (match) {
+      setActiveId(match.id);
+      setMobileView('detail');
+    }
   }, [initialGuardianName, threads]);
 
   const thread = threads.find(t => t.id === activeId) ?? threads[0];
@@ -151,7 +163,7 @@ export const TeacherMessages: React.FC<TeacherMessagesProps> = ({ initialGuardia
         </div>
       </div>
 
-      <div className="grid cols-messages" style={{ alignItems: 'flex-start' }}>
+      <div className="grid cols-messages messages-grid" data-mobile-view={mobileView} style={{ alignItems: 'flex-start' }}>
         {/* Thread list */}
         <div className="card" style={{ padding: 0, overflow: 'hidden', maxHeight: 720, overflowY: 'auto' }}>
           {threads.map(t => {
@@ -159,7 +171,7 @@ export const TeacherMessages: React.FC<TeacherMessagesProps> = ({ initialGuardia
             const relation = linkedChild ? findRelation(t.name) : null;
             const childFirst = linkedChild?.name.split(' ')[0];
             return (
-              <button key={t.id} onClick={() => setActiveId(t.id)}
+              <button key={t.id} onClick={() => selectThread(t.id)}
                 style={{ width: '100%', padding: '14px 16px', background: activeId === t.id ? 'var(--cream-2)' : 'transparent',
                   borderBottom: '1px solid var(--line)', textAlign: 'left', display: 'flex', gap: 12, alignItems: 'flex-start',
                   cursor: 'pointer', border: 'none', borderBottomColor: 'var(--line)', borderBottomWidth: 1, borderBottomStyle: 'solid' }}
@@ -192,9 +204,18 @@ export const TeacherMessages: React.FC<TeacherMessagesProps> = ({ initialGuardia
         </div>
 
         {/* Conversation */}
-        <div className="card" style={{ padding: 0, display: 'flex', flexDirection: 'column', minHeight: 540 }}>
+        <div className="card messages-detail" style={{ padding: 0, display: 'flex', flexDirection: 'column', minHeight: 540 }}>
           <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--line)' }}>
             <div className="row" style={{ gap: 12 }}>
+              <button
+                type="button"
+                className="messages-back"
+                onClick={() => setMobileView('list')}
+                aria-label="Back to all messages"
+                style={{ padding: 6, borderRadius: 8, display: 'none' }}
+              >
+                <Icon name="arrow-right" size={16} stroke="var(--ink-2)" style={{ transform: 'rotate(180deg)' }}/>
+              </button>
               <div className={`avatar-lg tone-${thread.tone}`} style={{ width: 34, height: 34, fontSize: 12 }}>{thread.initials}</div>
               <div>
                 <div style={{ fontWeight: 800 }}>{thread.name}</div>
@@ -252,7 +273,7 @@ export const TeacherMessages: React.FC<TeacherMessagesProps> = ({ initialGuardia
         </div>
 
         {/* Context panel */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <div className="messages-context" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           {(() => {
             const child = findChildByParent(thread.name);
             return child ? (
