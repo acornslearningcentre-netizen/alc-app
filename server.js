@@ -51,55 +51,94 @@ app.use(express.json({ limit: '64kb' }));
 const trim = (v) => (typeof v === 'string' ? v.trim() : '');
 const optional = (v) => (trim(v) || null);
 
+const idParam = (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id <= 0) {
+    res.status(400).json({ error: 'invalid id' });
+    return null;
+  }
+  return id;
+};
+
+// ── area_feedback ─────────────────────────────────────────────────────────
 app.get('/api/review/area-feedback', (_req, res) => {
-  const rows = db.prepare('SELECT * FROM area_feedback ORDER BY created_at DESC').all();
-  res.json(rows);
+  res.json(db.prepare('SELECT * FROM area_feedback ORDER BY created_at DESC').all());
 });
 app.post('/api/review/area-feedback', (req, res) => {
   const { area_key, area_label, comment, author, role } = req.body ?? {};
   if (!trim(area_key) || !trim(area_label) || !trim(comment)) {
     return res.status(400).json({ error: 'area_key, area_label, and comment are required' });
   }
-  const stmt = db.prepare(
+  const info = db.prepare(
     'INSERT INTO area_feedback (area_key, area_label, comment, author, role) VALUES (?, ?, ?, ?, ?)'
-  );
-  const info = stmt.run(trim(area_key), trim(area_label), trim(comment), optional(author), optional(role));
+  ).run(trim(area_key), trim(area_label), trim(comment), optional(author), optional(role));
   res.status(201).json(db.prepare('SELECT * FROM area_feedback WHERE id = ?').get(info.lastInsertRowid));
 });
+app.put('/api/review/area-feedback/:id', (req, res) => {
+  const id = idParam(req, res); if (!id) return;
+  const { comment, author } = req.body ?? {};
+  if (!trim(comment)) return res.status(400).json({ error: 'comment is required' });
+  const existing = db.prepare('SELECT id FROM area_feedback WHERE id = ?').get(id);
+  if (!existing) return res.status(404).json({ error: 'not found' });
+  db.prepare('UPDATE area_feedback SET comment = ?, author = ? WHERE id = ?').run(
+    trim(comment), optional(author), id
+  );
+  res.json(db.prepare('SELECT * FROM area_feedback WHERE id = ?').get(id));
+});
+app.delete('/api/review/area-feedback/:id', (req, res) => {
+  const id = idParam(req, res); if (!id) return;
+  db.prepare('DELETE FROM area_feedback WHERE id = ?').run(id);
+  res.status(204).end();
+});
 
+// ── feature_feedback ──────────────────────────────────────────────────────
 app.get('/api/review/feature-feedback', (_req, res) => {
-  const rows = db.prepare('SELECT * FROM feature_feedback ORDER BY created_at DESC').all();
-  res.json(rows);
+  res.json(db.prepare('SELECT * FROM feature_feedback ORDER BY created_at DESC').all());
 });
 app.post('/api/review/feature-feedback', (req, res) => {
   const { feature_key, feature_label, comment, author, role } = req.body ?? {};
   if (!trim(feature_key) || !trim(feature_label) || !trim(comment)) {
     return res.status(400).json({ error: 'feature_key, feature_label, and comment are required' });
   }
-  const stmt = db.prepare(
+  const info = db.prepare(
     'INSERT INTO feature_feedback (feature_key, feature_label, comment, author, role) VALUES (?, ?, ?, ?, ?)'
-  );
-  const info = stmt.run(trim(feature_key), trim(feature_label), trim(comment), optional(author), optional(role));
+  ).run(trim(feature_key), trim(feature_label), trim(comment), optional(author), optional(role));
   res.status(201).json(db.prepare('SELECT * FROM feature_feedback WHERE id = ?').get(info.lastInsertRowid));
 });
+app.put('/api/review/feature-feedback/:id', (req, res) => {
+  const id = idParam(req, res); if (!id) return;
+  const { comment, author } = req.body ?? {};
+  if (!trim(comment)) return res.status(400).json({ error: 'comment is required' });
+  const existing = db.prepare('SELECT id FROM feature_feedback WHERE id = ?').get(id);
+  if (!existing) return res.status(404).json({ error: 'not found' });
+  db.prepare('UPDATE feature_feedback SET comment = ?, author = ? WHERE id = ?').run(
+    trim(comment), optional(author), id
+  );
+  res.json(db.prepare('SELECT * FROM feature_feedback WHERE id = ?').get(id));
+});
+app.delete('/api/review/feature-feedback/:id', (req, res) => {
+  const id = idParam(req, res); if (!id) return;
+  db.prepare('DELETE FROM feature_feedback WHERE id = ?').run(id);
+  res.status(204).end();
+});
 
+// ── requests ──────────────────────────────────────────────────────────────
 app.get('/api/review/requests', (_req, res) => {
-  const rows = db.prepare('SELECT * FROM requests ORDER BY created_at DESC').all();
-  res.json(rows);
+  res.json(db.prepare('SELECT * FROM requests ORDER BY created_at DESC').all());
 });
 app.post('/api/review/requests', (req, res) => {
   const { feature, description, author } = req.body ?? {};
   if (!trim(feature) || !trim(description)) {
     return res.status(400).json({ error: 'feature and description are required' });
   }
-  const stmt = db.prepare('INSERT INTO requests (feature, description, author) VALUES (?, ?, ?)');
-  const info = stmt.run(trim(feature), trim(description), optional(author));
+  const info = db.prepare(
+    'INSERT INTO requests (feature, description, author) VALUES (?, ?, ?)'
+  ).run(trim(feature), trim(description), optional(author));
   res.status(201).json(db.prepare('SELECT * FROM requests WHERE id = ?').get(info.lastInsertRowid));
 });
 app.put('/api/review/requests/:id', (req, res) => {
-  const id = Number(req.params.id);
+  const id = idParam(req, res); if (!id) return;
   const { feature, description, author } = req.body ?? {};
-  if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ error: 'invalid id' });
   if (!trim(feature) || !trim(description)) {
     return res.status(400).json({ error: 'feature and description are required' });
   }
@@ -109,6 +148,11 @@ app.put('/api/review/requests/:id', (req, res) => {
     "UPDATE requests SET feature = ?, description = ?, author = ?, updated_at = datetime('now') WHERE id = ?"
   ).run(trim(feature), trim(description), optional(author), id);
   res.json(db.prepare('SELECT * FROM requests WHERE id = ?').get(id));
+});
+app.delete('/api/review/requests/:id', (req, res) => {
+  const id = idParam(req, res); if (!id) return;
+  db.prepare('DELETE FROM requests WHERE id = ?').run(id);
+  res.status(204).end();
 });
 
 app.get('/api/health', (_req, res) => res.json({ ok: true }));

@@ -1,216 +1,250 @@
-/* Review Guide — floating launcher + modal with three reviewer-facing tables. */
+/* Review Guide — full-screen reviewer page with hidden-by-default forms.
+   Designed for ultra-low cognitive load: one card per item, one obvious
+   button per action, friendly plain-language labels. */
 
+/* ── Floating launcher (visible only when the page is closed) ────────── */
 .review-guide-fab {
   position: fixed;
   left: 16px;
   bottom: 16px;
   z-index: 60;
-  padding: 10px 14px;
+  padding: 12px 18px;
   border-radius: 999px;
   background: var(--ink);
   color: var(--cream);
   font-weight: 700;
-  font-size: 12.5px;
+  font-size: 13px;
   border: 1px solid var(--ink);
   box-shadow: 0 6px 18px rgba(0, 0, 0, 0.18);
   cursor: pointer;
   letter-spacing: 0.01em;
 }
+.review-guide-fab::before { content: "📣 "; }
 .review-guide-fab:hover { transform: translateY(-1px); }
 .review-guide-fab:focus-visible { outline: 3px solid var(--ochre); outline-offset: 2px; }
 
-.review-guide-scrim {
+/* Lock background scroll while the page is shown */
+body.review-page-open { overflow: hidden; }
+
+/* ── Full-screen page ─────────────────────────────────────────────────── */
+.review-page {
   position: fixed;
   inset: 0;
-  background: rgba(20, 18, 14, 0.5);
-  z-index: 70;
-  display: grid;
-  place-items: center;
-  padding: 24px;
-}
-
-.review-guide-panel {
-  width: min(1080px, 100%);
-  max-height: calc(100vh - 48px);
+  z-index: 80;
   background: var(--cream);
-  border-radius: 16px;
-  border: 1px solid var(--line);
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.25);
 }
 
-.review-guide-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 16px;
-  padding: 18px 22px;
+.review-page-header {
+  padding: 18px 28px 14px;
   border-bottom: 1px solid var(--line);
-}
-.review-guide-header h2 { margin: 0; font-size: 18px; }
-.review-guide-header p { margin: 4px 0 0; color: var(--ink-2); font-size: 13px; }
-
-.review-guide-tabs {
+  background: var(--cream);
   display: flex;
-  gap: 4px;
-  padding: 8px 12px;
-  border-bottom: 1px solid var(--line);
-  background: var(--cream-2);
+  flex-direction: column;
+  gap: 10px;
 }
-.review-guide-tab {
-  padding: 8px 14px;
-  border-radius: 999px;
-  border: 1px solid transparent;
-  background: transparent;
-  color: var(--ink-2);
+.review-page-back {
+  align-self: flex-start;
+  padding: 6px 12px;
   font-size: 13px;
   font-weight: 600;
-  cursor: pointer;
 }
-.review-guide-tab:hover { background: var(--cream); }
-.review-guide-tab.active {
+.review-page-title h1 {
+  margin: 0;
+  font-size: 26px;
+}
+.review-page-title p {
+  margin: 4px 0 0;
+  color: var(--ink-2);
+  font-size: 14px;
+}
+
+/* ── Tabs (big and clear, with a hint line) ──────────────────────────── */
+.review-tabs {
+  display: flex;
+  gap: 10px;
+  padding: 14px 28px;
+  border-bottom: 1px solid var(--line);
+  background: var(--cream-2);
+  overflow-x: auto;
+}
+.review-tab {
+  flex: 1 1 0;
+  min-width: 180px;
+  padding: 12px 16px;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: var(--cream);
+  text-align: left;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  transition: transform 80ms ease;
+}
+.review-tab:hover { transform: translateY(-1px); }
+.review-tab.active {
   background: var(--ink);
   color: var(--cream);
   border-color: var(--ink);
 }
+.review-tab-label { font-weight: 800; font-size: 15px; }
+.review-tab-hint  { font-size: 12px; opacity: 0.75; }
 
-.review-guide-body {
-  padding: 18px 22px 22px;
+/* ── Body ─────────────────────────────────────────────────────────────── */
+.review-page-body {
+  flex: 1;
   overflow-y: auto;
+  padding: 22px 28px 60px;
 }
 
-.review-guide-blurb {
-  margin: 0 0 14px;
+.review-blurb {
+  margin: 0 0 18px;
   color: var(--ink-2);
-  font-size: 13.5px;
+  font-size: 14px;
   line-height: 1.55;
+  max-width: 720px;
 }
 
-.review-guide-table-wrap {
-  border: 1px solid var(--line);
+.review-loading,
+.review-empty {
+  padding: 28px;
+  text-align: center;
+  color: var(--ink-3);
+  font-size: 14px;
+  background: var(--cream-2);
+  border: 1px dashed var(--line);
   border-radius: 12px;
-  overflow: hidden;
+  list-style: none;
 }
 
-.review-guide-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 13px;
-}
-.review-guide-table thead th {
-  text-align: left;
-  background: var(--cream-2);
-  padding: 10px 12px;
-  font-weight: 700;
-  color: var(--ink-2);
-  font-size: 12px;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  border-bottom: 1px solid var(--line);
-}
-.review-guide-table tbody td {
-  padding: 10px 12px;
-  vertical-align: top;
-  border-bottom: 1px solid var(--line);
-  line-height: 1.5;
-}
-.review-guide-table tbody tr:last-child td { border-bottom: none; }
-.review-guide-table .strong { font-weight: 700; color: var(--ink); }
-.review-guide-table .muted { color: var(--ink-3); }
-.review-guide-table .nowrap { white-space: nowrap; }
-.review-guide-table .multiline { white-space: pre-wrap; }
-
-.review-guide-subrow td {
-  background: var(--cream-2);
-  padding: 14px 16px;
+/* ── Cards ────────────────────────────────────────────────────────────── */
+.review-cards {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+  gap: 14px;
 }
 
-.review-guide-locked td { background: rgba(244, 240, 232, 0.4); }
-.review-guide-editing td { background: var(--ochre-soft); }
+.review-card {
+  background: var(--cream);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.review-card.editing { background: var(--ochre-soft); border-color: var(--ochre); }
+.review-card-head { display: flex; flex-direction: column; gap: 6px; }
+.review-card-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+.review-card-title { margin: 2px 0 0; font-size: 16px; font-weight: 800; color: var(--ink); }
+.review-card-sub  { margin: 0; color: var(--ink-2); font-size: 13.5px; line-height: 1.55; }
+.review-card-sub.multiline { white-space: pre-wrap; }
+.review-card-meta { font-size: 12px; color: var(--ink-3); margin-top: 4px; }
 
-.review-guide-form {
+.review-row-actions { display: flex; gap: 8px; }
+
+/* ── Notes (saved feedback list) ─────────────────────────────────────── */
+.review-notes {
+  list-style: none;
+  margin: 0;
+  padding: 0;
   display: flex;
   flex-direction: column;
   gap: 8px;
-  background: var(--cream);
-  padding: 12px;
+}
+.review-note {
+  background: var(--cream-2);
+  border: 1px solid var(--line);
   border-radius: 10px;
-  border: 1px solid var(--line);
-}
-.review-guide-new-request {
-  margin-top: 4px;
-  padding: 16px;
-}
-.review-guide-form-grid {
-  display: grid;
-  grid-template-columns: 2fr 1fr;
-  gap: 8px;
-}
-.review-guide-form input,
-.review-guide-form textarea,
-.review-guide-editing input,
-.review-guide-editing textarea {
-  width: 100%;
-  padding: 9px 11px;
-  border-radius: 8px;
-  border: 1px solid var(--line);
-  background: var(--cream);
-  font-size: 13px;
-  font-family: inherit;
-  resize: vertical;
-}
-.review-guide-form-row {
-  display: flex;
-  gap: 10px;
-  align-items: center;
-}
-
-.review-guide-edit-actions {
+  padding: 10px 12px;
   display: flex;
   flex-direction: column;
   gap: 6px;
 }
+.review-note.editing { background: var(--ochre-soft); border-color: var(--ochre); }
+.review-note-body { font-size: 13.5px; line-height: 1.5; color: var(--ink); white-space: pre-wrap; }
+.review-note-meta {
+  font-size: 12px;
+  color: var(--ink-3);
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 8px;
+  align-items: center;
+}
+.review-note-actions { display: flex; gap: 6px; }
 
-.review-guide-notes {
-  list-style: none;
-  margin: 0 0 10px;
-  padding: 0;
+/* ── Add buttons (the only call-to-action per row) ───────────────────── */
+.review-add-btn {
+  align-self: stretch;
+  padding: 11px 16px;
+  font-size: 14px;
+  font-weight: 700;
+  border-radius: 10px;
+}
+.review-add-big {
+  display: block;
+  width: 100%;
+  padding: 14px 18px;
+  font-size: 15px;
+  font-weight: 800;
+  border-radius: 12px;
+}
+
+/* ── Forms ───────────────────────────────────────────────────────────── */
+.review-form {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
 }
-.review-guide-notes li {
+.review-form-card {
   background: var(--cream);
   border: 1px solid var(--line);
-  border-radius: 8px;
-  padding: 8px 10px;
+  border-radius: 14px;
+  padding: 18px;
+}
+.review-form-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
   font-size: 12.5px;
-  line-height: 1.5;
+  color: var(--ink-2);
+  font-weight: 600;
 }
-.review-guide-note-meta { font-size: 11.5px; margin-bottom: 2px; }
+.review-form-row input,
+.review-form-row textarea {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--cream);
+  font-size: 14px;
+  font-family: inherit;
+  color: var(--ink);
+  resize: vertical;
+}
+.review-form-row input:focus,
+.review-form-row textarea:focus {
+  outline: 2px solid var(--ochre);
+  outline-offset: 1px;
+}
+.review-form-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
 
-.review-guide-error {
-  background: rgba(180, 60, 50, 0.08);
-  color: #8a3026;
-  border: 1px solid rgba(180, 60, 50, 0.3);
-  padding: 8px 12px;
-  border-radius: 8px;
-  font-size: 12.5px;
-  margin-bottom: 12px;
-}
-.review-guide-error.inline {
-  background: transparent;
-  border: none;
-  padding: 0;
-  margin: 0;
-}
-
-/* Role pills — small coloured badges */
-.review-guide-table .pill {
+/* ── Pills ───────────────────────────────────────────────────────────── */
+.pill {
   display: inline-block;
-  padding: 2px 8px;
+  padding: 2px 9px;
   border-radius: 999px;
   font-size: 11px;
   font-weight: 700;
@@ -221,25 +255,43 @@
   border: 1px solid var(--line);
   white-space: nowrap;
 }
-.review-guide-table .pill.role-teacher { background: #e6efe5; color: #2f5f3a; border-color: #cadcc6; }
-.review-guide-table .pill.role-parent  { background: #f3e7d8; color: #7a5320; border-color: #e2cfa9; }
-.review-guide-table .pill.role-student { background: #e6e6f1; color: #443d77; border-color: #cdc9e2; }
-.review-guide-table .pill.role-leader  { background: #ecdfe7; color: #6b3a55; border-color: #d8c2cf; }
-.review-guide-table .pill.role-login   { background: #e1ebf0; color: #355168; border-color: #c5d6df; }
+.pill.role-teacher { background: #e6efe5; color: #2f5f3a; border-color: #cadcc6; }
+.pill.role-parent  { background: #f3e7d8; color: #7a5320; border-color: #e2cfa9; }
+.pill.role-student { background: #e6e6f1; color: #443d77; border-color: #cdc9e2; }
+.pill.role-leader  { background: #ecdfe7; color: #6b3a55; border-color: #d8c2cf; }
+.pill.role-login   { background: #e1ebf0; color: #355168; border-color: #c5d6df; }
+.pill.screen       { background: var(--cream); color: var(--ink-2); }
 
+/* ── Buttons (small + danger variants used by this feature only) ─────── */
 .btn.small { padding: 5px 10px; font-size: 12px; }
+.btn.danger {
+  background: rgba(180, 60, 50, 0.08);
+  color: #8a3026;
+  border: 1px solid rgba(180, 60, 50, 0.3);
+}
+.btn.danger:hover { background: rgba(180, 60, 50, 0.16); }
 
+/* ── Errors ──────────────────────────────────────────────────────────── */
+.review-error {
+  background: rgba(180, 60, 50, 0.08);
+  color: #8a3026;
+  border: 1px solid rgba(180, 60, 50, 0.3);
+  padding: 10px 12px;
+  border-radius: 10px;
+  font-size: 13px;
+  margin-bottom: 14px;
+}
+.review-error.inline { margin: 0; }
+
+/* ── Mobile ──────────────────────────────────────────────────────────── */
 @media (max-width: 720px) {
-  .review-guide-scrim { padding: 0; }
-  .review-guide-panel { border-radius: 0; max-height: 100vh; height: 100vh; width: 100%; }
-  .review-guide-form-grid { grid-template-columns: 1fr; }
-  .review-guide-table { font-size: 12.5px; }
-  .review-guide-table thead { display: none; }
-  .review-guide-table tbody td { display: block; border-bottom: none; padding: 4px 12px; }
-  .review-guide-table tbody tr {
-    display: block;
-    padding: 10px 0;
-    border-bottom: 1px solid var(--line);
-  }
-  .review-guide-fab { left: 12px; bottom: 12px; }
+  .review-page-header { padding: 14px 16px 10px; }
+  .review-page-title h1 { font-size: 20px; }
+  .review-tabs { padding: 10px 14px; gap: 8px; }
+  .review-tab { min-width: 150px; padding: 10px 12px; }
+  .review-page-body { padding: 16px 14px 56px; }
+  .review-cards { grid-template-columns: 1fr; }
+  .review-guide-fab { left: 12px; bottom: 12px; padding: 10px 14px; }
+  .review-form-actions { justify-content: stretch; }
+  .review-form-actions .btn { flex: 1; }
 }

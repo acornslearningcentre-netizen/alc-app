@@ -13,438 +13,590 @@ const areaKey = (a: { role: string; screen: string; element: string }) =>
   `${a.role}/${a.screen}/${a.element}`;
 const featureKey = (f: { role: string; screen: string }) => `${f.role}/${f.screen}`;
 
+function useHashRoute(): [boolean, (open: boolean) => void] {
+  const isReview = () => window.location.hash === '#review';
+  const [open, setOpen] = useState<boolean>(isReview);
+  useEffect(() => {
+    const onChange = () => setOpen(isReview());
+    window.addEventListener('hashchange', onChange);
+    return () => window.removeEventListener('hashchange', onChange);
+  }, []);
+  const set = (next: boolean) => {
+    if (next && window.location.hash !== '#review') window.location.hash = '#review';
+    if (!next && window.location.hash === '#review') {
+      history.replaceState(null, '', window.location.pathname + window.location.search);
+      setOpen(false);
+    }
+  };
+  return [open, set];
+}
+
 /**
- * Floating "Review guide" launcher pinned to the bottom-left of the viewport.
- * Opens a 3-tab modal: clickable areas, features, and free-form requests.
- * Each section has a feedback form and persists to the SQLite-backed API.
+ * Review Guide — a full-screen page (not a modal) with three tabs.
+ * Forms are hidden by default; click the "Add" / "Write a note" button on any
+ * row to reveal it, click again to close. Saved notes can be edited or deleted.
  */
 export const ReviewGuide: React.FC = () => {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useHashRoute();
   const [tab, setTab] = useState<Tab>('areas');
+
+  useEffect(() => {
+    document.body.classList.toggle('review-page-open', open);
+    return () => document.body.classList.remove('review-page-open');
+  }, [open]);
 
   return (
     <>
-      <button
-        type="button"
-        className="review-guide-fab"
-        onClick={() => setOpen(true)}
-        aria-haspopup="dialog"
-        aria-expanded={open}
-      >
-        Review guide
-      </button>
+      {!open && (
+        <button
+          type="button"
+          className="review-guide-fab"
+          onClick={() => setOpen(true)}
+          aria-label="Open the reviewer guide"
+        >
+          Review guide
+        </button>
+      )}
 
       {open && (
-        <div
-          className="review-guide-scrim"
-          role="dialog"
-          aria-modal="true"
-          aria-label="Reviewer guide"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) setOpen(false);
-          }}
-        >
-          <div className="review-guide-panel">
-            <header className="review-guide-header">
-              <div>
-                <h2>Reviewer guide</h2>
-                <p>What to click, what each screen does, and a place to leave notes.</p>
-              </div>
-              <button className="btn ghost" onClick={() => setOpen(false)} aria-label="Close">
-                Close
-              </button>
-            </header>
+        <div className="review-page" role="region" aria-label="Reviewer guide">
+          <header className="review-page-header">
+            <button
+              type="button"
+              className="btn ghost review-page-back"
+              onClick={() => setOpen(false)}
+            >
+              ← Back to app
+            </button>
+            <div className="review-page-title">
+              <h1>Reviewer guide</h1>
+              <p>Pick what you want to look at, then leave a note.</p>
+            </div>
+          </header>
 
-            <nav className="review-guide-tabs" role="tablist">
-              <TabButton active={tab === 'areas'} onClick={() => setTab('areas')}>
-                Clickable areas
-              </TabButton>
-              <TabButton active={tab === 'features'} onClick={() => setTab('features')}>
-                Features
-              </TabButton>
-              <TabButton active={tab === 'requests'} onClick={() => setTab('requests')}>
-                Requests
-              </TabButton>
-            </nav>
+          <nav className="review-tabs" role="tablist" aria-label="Sections">
+            <Tab active={tab === 'areas'} onClick={() => setTab('areas')} label="What to click" hint="Areas you can tap on" />
+            <Tab active={tab === 'features'} onClick={() => setTab('features')} label="What it does" hint="Each screen explained" />
+            <Tab active={tab === 'requests'} onClick={() => setTab('requests')} label="Your ideas" hint="Suggest something new" />
+          </nav>
 
-            <section className="review-guide-body">
-              {tab === 'areas' && <AreasTab />}
-              {tab === 'features' && <FeaturesTab />}
-              {tab === 'requests' && <RequestsTab />}
-            </section>
-          </div>
+          <main className="review-page-body">
+            {tab === 'areas' && <AreasSection />}
+            {tab === 'features' && <FeaturesSection />}
+            {tab === 'requests' && <RequestsSection />}
+          </main>
         </div>
       )}
     </>
   );
 };
 
-const TabButton: React.FC<{ active: boolean; onClick: () => void; children: React.ReactNode }> = ({
+const Tab: React.FC<{ active: boolean; onClick: () => void; label: string; hint: string }> = ({
   active,
   onClick,
-  children,
+  label,
+  hint,
 }) => (
   <button
     type="button"
     role="tab"
     aria-selected={active}
     onClick={onClick}
-    className={`review-guide-tab${active ? ' active' : ''}`}
+    className={`review-tab${active ? ' active' : ''}`}
   >
-    {children}
+    <span className="review-tab-label">{label}</span>
+    <span className="review-tab-hint">{hint}</span>
   </button>
 );
 
-// ── Clickable areas tab ─────────────────────────────────────────────────────
-const AreasTab: React.FC = () => {
-  const [feedback, setFeedback] = useState<AreaFeedback[]>([]);
-  const [openRow, setOpenRow] = useState<string | null>(null);
+// ────────────────────────────────────────────────────────────────────────────
+// Section: Clickable areas
+// ────────────────────────────────────────────────────────────────────────────
+const AreasSection: React.FC = () => {
+  const [notes, setNotes] = useState<AreaFeedback[]>([]);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    reviewApi.listAreaFeedback().then(setFeedback).catch((e) => setError(String(e)));
+    reviewApi.listAreaFeedback()
+      .then(setNotes)
+      .catch((e) => setError(String(e)))
+      .finally(() => setLoading(false));
   }, []);
 
   const grouped = useMemo(() => {
-    const map = new Map<string, AreaFeedback[]>();
-    for (const f of feedback) {
-      const arr = map.get(f.area_key) ?? [];
-      arr.push(f);
-      map.set(f.area_key, arr);
+    const m = new Map<string, AreaFeedback[]>();
+    for (const n of notes) {
+      const arr = m.get(n.area_key) ?? [];
+      arr.push(n);
+      m.set(n.area_key, arr);
     }
-    return map;
-  }, [feedback]);
+    return m;
+  }, [notes]);
+
+  if (loading) return <div className="review-loading">Loading…</div>;
 
   return (
     <>
-      <p className="review-guide-blurb">
-        Tap any element below in the app to see what it does. Use the comment box on a row to leave
-        a note about that interaction.
+      <p className="review-blurb">
+        Each row tells you what to click in the app and what should happen. Use
+        <strong> Write a note</strong> to leave feedback on that interaction.
       </p>
-      {error && <div className="review-guide-error">Couldn’t load feedback: {error}</div>}
-      <div className="review-guide-table-wrap">
-        <table className="review-guide-table">
-          <thead>
-            <tr>
-              <th>Role</th>
-              <th>Screen</th>
-              <th>Element</th>
-              <th>What you’ll see</th>
-              <th>Notes</th>
-            </tr>
-          </thead>
-          <tbody>
-            {CLICKABLE_AREAS.map((a) => {
-              const key = areaKey(a);
-              const notes = grouped.get(key) ?? [];
-              const isOpen = openRow === key;
-              return (
-                <React.Fragment key={key}>
-                  <tr>
-                    <td><span className={`pill role-${a.role}`}>{a.role}</span></td>
-                    <td>{a.screen}</td>
-                    <td className="strong">{a.element}</td>
-                    <td>{a.observable}</td>
-                    <td>
-                      <button
-                        type="button"
-                        className="btn ghost small"
-                        onClick={() => setOpenRow(isOpen ? null : key)}
-                      >
-                        {isOpen ? 'Hide' : `Comment${notes.length ? ` (${notes.length})` : ''}`}
-                      </button>
-                    </td>
-                  </tr>
-                  {isOpen && (
-                    <tr className="review-guide-subrow">
-                      <td colSpan={5}>
-                        <NoteList notes={notes.map((n) => ({ author: n.author, body: n.comment, when: n.created_at }))} />
-                        <AreaFeedbackForm
-                          area={a}
-                          onSaved={(f) => setFeedback((prev) => [f, ...prev])}
-                        />
-                      </td>
-                    </tr>
-                  )}
-                </React.Fragment>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+      {error && <div className="review-error">Couldn’t load notes: {error}</div>}
+      <ul className="review-cards">
+        {CLICKABLE_AREAS.map((a) => {
+          const key = areaKey(a);
+          const list = grouped.get(key) ?? [];
+          return (
+            <AreaCard
+              key={key}
+              area={a}
+              notes={list}
+              onCreate={(n) => setNotes((prev) => [n, ...prev])}
+              onUpdate={(n) => setNotes((prev) => prev.map((x) => (x.id === n.id ? n : x)))}
+              onDelete={(id) => setNotes((prev) => prev.filter((x) => x.id !== id))}
+            />
+          );
+        })}
+      </ul>
     </>
   );
 };
 
-const AreaFeedbackForm: React.FC<{
-  area: { role: string; screen: string; element: string };
-  onSaved: (f: AreaFeedback) => void;
-}> = ({ area, onSaved }) => {
-  const [author, setAuthor] = useState('');
-  const [comment, setComment] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
-
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!comment.trim()) return;
-    setBusy(true);
-    setErr(null);
-    try {
-      const saved = await reviewApi.addAreaFeedback({
-        area_key: areaKey(area),
-        area_label: `${area.screen} \u00b7 ${area.element}`,
-        comment: comment.trim(),
-        author: author.trim() || undefined,
-        role: area.role,
-      });
-      onSaved(saved);
-      setComment('');
-    } catch (e) {
-      setErr(String(e));
-    } finally {
-      setBusy(false);
-    }
-  };
+const AreaCard: React.FC<{
+  area: { role: string; screen: string; element: string; observable: string };
+  notes: AreaFeedback[];
+  onCreate: (n: AreaFeedback) => void;
+  onUpdate: (n: AreaFeedback) => void;
+  onDelete: (id: number) => void;
+}> = ({ area, notes, onCreate, onUpdate, onDelete }) => {
+  const [showForm, setShowForm] = useState(false);
 
   return (
-    <form onSubmit={submit} className="review-guide-form">
-      <input
-        type="text"
-        placeholder="Your name (optional)"
-        value={author}
-        onChange={(e) => setAuthor(e.target.value)}
-      />
-      <textarea
-        rows={2}
-        placeholder={`What did you notice about "${area.element}"?`}
-        value={comment}
-        onChange={(e) => setComment(e.target.value)}
-        required
-      />
-      <div className="review-guide-form-row">
-        <button type="submit" className="btn primary small" disabled={busy || !comment.trim()}>
-          {busy ? 'Saving\u2026' : 'Save note'}
-        </button>
-        {err && <span className="review-guide-error inline">{err}</span>}
+    <li className="review-card">
+      <div className="review-card-head">
+        <div className="review-card-tags">
+          <span className={`pill role-${area.role}`}>{area.role}</span>
+          <span className="pill screen">{area.screen}</span>
+        </div>
+        <h3 className="review-card-title">{area.element}</h3>
+        <p className="review-card-sub">{area.observable}</p>
       </div>
-    </form>
+
+      {notes.length > 0 && (
+        <ul className="review-notes">
+          {notes.map((n) => (
+            <NoteItem
+              key={n.id}
+              note={n}
+              onSave={async (b) => {
+                const updated = await reviewApi.updateAreaFeedback(n.id, b);
+                onUpdate(updated);
+              }}
+              onDelete={async () => {
+                await reviewApi.deleteAreaFeedback(n.id);
+                onDelete(n.id);
+              }}
+            />
+          ))}
+        </ul>
+      )}
+
+      {showForm ? (
+        <NoteForm
+          placeholder={`What did you notice about “${area.element}”?`}
+          submitLabel="Save my note"
+          onCancel={() => setShowForm(false)}
+          onSubmit={async (b) => {
+            const saved = await reviewApi.addAreaFeedback({
+              area_key: areaKey(area),
+              area_label: `${area.screen} · ${area.element}`,
+              comment: b.comment,
+              author: b.author,
+              role: area.role,
+            });
+            onCreate(saved);
+            setShowForm(false);
+          }}
+        />
+      ) : (
+        <button
+          type="button"
+          className="btn primary review-add-btn"
+          onClick={() => setShowForm(true)}
+        >
+          ✏️ Write a note{notes.length ? ` (${notes.length} saved)` : ''}
+        </button>
+      )}
+    </li>
   );
 };
 
-// ── Features tab ────────────────────────────────────────────────────────────
-const FeaturesTab: React.FC = () => {
-  const [feedback, setFeedback] = useState<FeatureFeedback[]>([]);
-  const [openRow, setOpenRow] = useState<string | null>(null);
+// ────────────────────────────────────────────────────────────────────────────
+// Section: Features
+// ────────────────────────────────────────────────────────────────────────────
+const FeaturesSection: React.FC = () => {
+  const [notes, setNotes] = useState<FeatureFeedback[]>([]);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    reviewApi.listFeatureFeedback().then(setFeedback).catch((e) => setError(String(e)));
+    reviewApi.listFeatureFeedback()
+      .then(setNotes)
+      .catch((e) => setError(String(e)))
+      .finally(() => setLoading(false));
   }, []);
 
   const grouped = useMemo(() => {
-    const map = new Map<string, FeatureFeedback[]>();
-    for (const f of feedback) {
-      const arr = map.get(f.feature_key) ?? [];
-      arr.push(f);
-      map.set(f.feature_key, arr);
+    const m = new Map<string, FeatureFeedback[]>();
+    for (const n of notes) {
+      const arr = m.get(n.feature_key) ?? [];
+      arr.push(n);
+      m.set(n.feature_key, arr);
     }
-    return map;
-  }, [feedback]);
+    return m;
+  }, [notes]);
+
+  if (loading) return <div className="review-loading">Loading…</div>;
 
   return (
     <>
-      <p className="review-guide-blurb">
-        One row per screen. Use the comment box to suggest an adjustment to that feature.
+      <p className="review-blurb">
+        One row per screen. Use <strong>Suggest a change</strong> to share what you’d like adjusted.
       </p>
-      {error && <div className="review-guide-error">Couldn’t load feedback: {error}</div>}
-      <div className="review-guide-table-wrap">
-        <table className="review-guide-table">
-          <thead>
-            <tr>
-              <th>Role</th>
-              <th>Screen</th>
-              <th>What it does</th>
-              <th>Adjustments</th>
-            </tr>
-          </thead>
-          <tbody>
-            {FEATURES.map((f) => {
-              const key = featureKey(f);
-              const notes = grouped.get(key) ?? [];
-              const isOpen = openRow === key;
-              return (
-                <React.Fragment key={key}>
-                  <tr>
-                    <td><span className={`pill role-${f.role}`}>{f.role}</span></td>
-                    <td className="strong">{f.screen}</td>
-                    <td>{f.purpose}</td>
-                    <td>
-                      <button
-                        type="button"
-                        className="btn ghost small"
-                        onClick={() => setOpenRow(isOpen ? null : key)}
-                      >
-                        {isOpen ? 'Hide' : `Suggest${notes.length ? ` (${notes.length})` : ''}`}
-                      </button>
-                    </td>
-                  </tr>
-                  {isOpen && (
-                    <tr className="review-guide-subrow">
-                      <td colSpan={4}>
-                        <NoteList notes={notes.map((n) => ({ author: n.author, body: n.comment, when: n.created_at }))} />
-                        <FeatureFeedbackForm
-                          feature={f}
-                          onSaved={(saved) => setFeedback((prev) => [saved, ...prev])}
-                        />
-                      </td>
-                    </tr>
-                  )}
-                </React.Fragment>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+      {error && <div className="review-error">Couldn’t load suggestions: {error}</div>}
+      <ul className="review-cards">
+        {FEATURES.map((f) => {
+          const key = featureKey(f);
+          const list = grouped.get(key) ?? [];
+          return (
+            <FeatureCard
+              key={key}
+              feature={f}
+              notes={list}
+              onCreate={(n) => setNotes((prev) => [n, ...prev])}
+              onUpdate={(n) => setNotes((prev) => prev.map((x) => (x.id === n.id ? n : x)))}
+              onDelete={(id) => setNotes((prev) => prev.filter((x) => x.id !== id))}
+            />
+          );
+        })}
+      </ul>
     </>
   );
 };
 
-const FeatureFeedbackForm: React.FC<{
-  feature: { role: string; screen: string };
-  onSaved: (f: FeatureFeedback) => void;
-}> = ({ feature, onSaved }) => {
-  const [author, setAuthor] = useState('');
-  const [comment, setComment] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
-
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!comment.trim()) return;
-    setBusy(true);
-    setErr(null);
-    try {
-      const saved = await reviewApi.addFeatureFeedback({
-        feature_key: featureKey(feature),
-        feature_label: `${feature.role} \u00b7 ${feature.screen}`,
-        comment: comment.trim(),
-        author: author.trim() || undefined,
-        role: feature.role,
-      });
-      onSaved(saved);
-      setComment('');
-    } catch (e) {
-      setErr(String(e));
-    } finally {
-      setBusy(false);
-    }
-  };
+const FeatureCard: React.FC<{
+  feature: { role: string; screen: string; purpose: string };
+  notes: FeatureFeedback[];
+  onCreate: (n: FeatureFeedback) => void;
+  onUpdate: (n: FeatureFeedback) => void;
+  onDelete: (id: number) => void;
+}> = ({ feature, notes, onCreate, onUpdate, onDelete }) => {
+  const [showForm, setShowForm] = useState(false);
 
   return (
-    <form onSubmit={submit} className="review-guide-form">
-      <input
-        type="text"
-        placeholder="Your name (optional)"
-        value={author}
-        onChange={(e) => setAuthor(e.target.value)}
-      />
-      <textarea
-        rows={2}
-        placeholder={`What would you adjust about ${feature.screen}?`}
-        value={comment}
-        onChange={(e) => setComment(e.target.value)}
-        required
-      />
-      <div className="review-guide-form-row">
-        <button type="submit" className="btn primary small" disabled={busy || !comment.trim()}>
-          {busy ? 'Saving\u2026' : 'Save suggestion'}
-        </button>
-        {err && <span className="review-guide-error inline">{err}</span>}
+    <li className="review-card">
+      <div className="review-card-head">
+        <div className="review-card-tags">
+          <span className={`pill role-${feature.role}`}>{feature.role}</span>
+          <span className="pill screen">{feature.screen}</span>
+        </div>
+        <h3 className="review-card-title">{feature.screen}</h3>
+        <p className="review-card-sub">{feature.purpose}</p>
       </div>
-    </form>
+
+      {notes.length > 0 && (
+        <ul className="review-notes">
+          {notes.map((n) => (
+            <NoteItem
+              key={n.id}
+              note={n}
+              onSave={async (b) => {
+                const updated = await reviewApi.updateFeatureFeedback(n.id, b);
+                onUpdate(updated);
+              }}
+              onDelete={async () => {
+                await reviewApi.deleteFeatureFeedback(n.id);
+                onDelete(n.id);
+              }}
+            />
+          ))}
+        </ul>
+      )}
+
+      {showForm ? (
+        <NoteForm
+          placeholder={`What would you change about ${feature.screen}?`}
+          submitLabel="Save my suggestion"
+          onCancel={() => setShowForm(false)}
+          onSubmit={async (b) => {
+            const saved = await reviewApi.addFeatureFeedback({
+              feature_key: featureKey(feature),
+              feature_label: `${feature.role} · ${feature.screen}`,
+              comment: b.comment,
+              author: b.author,
+              role: feature.role,
+            });
+            onCreate(saved);
+            setShowForm(false);
+          }}
+        />
+      ) : (
+        <button
+          type="button"
+          className="btn primary review-add-btn"
+          onClick={() => setShowForm(true)}
+        >
+          💡 Suggest a change{notes.length ? ` (${notes.length} saved)` : ''}
+        </button>
+      )}
+    </li>
   );
 };
 
-// ── Requests tab ────────────────────────────────────────────────────────────
-const RequestsTab: React.FC = () => {
+// ────────────────────────────────────────────────────────────────────────────
+// Section: Requests (free-form)
+// ────────────────────────────────────────────────────────────────────────────
+const RequestsSection: React.FC = () => {
   const [items, setItems] = useState<FeatureRequest[]>([]);
-  const [editingId, setEditingId] = useState<number | null>(null);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showForm, setShowForm] = useState(false);
 
   useEffect(() => {
-    reviewApi.listRequests().then(setItems).catch((e) => setError(String(e)));
+    reviewApi.listRequests()
+      .then(setItems)
+      .catch((e) => setError(String(e)))
+      .finally(() => setLoading(false));
   }, []);
+
+  if (loading) return <div className="review-loading">Loading…</div>;
 
   return (
     <>
-      <p className="review-guide-blurb">
-        Add anything you’d like to see in the app. Saved entries are locked — click <em>Edit</em>{' '}
-        on a row to change it.
+      <p className="review-blurb">
+        Add anything you’d like to see in the app. You can edit or delete your idea later.
       </p>
-      {error && <div className="review-guide-error">Couldn’t load requests: {error}</div>}
+      {error && <div className="review-error">Couldn’t load ideas: {error}</div>}
 
-      <NewRequestForm onSaved={(r) => setItems((prev) => [r, ...prev])} />
+      {showForm ? (
+        <RequestForm
+          onCancel={() => setShowForm(false)}
+          onSubmit={async (b) => {
+            const saved = await reviewApi.addRequest(b);
+            setItems((prev) => [saved, ...prev]);
+            setShowForm(false);
+          }}
+        />
+      ) : (
+        <button
+          type="button"
+          className="btn primary review-add-big"
+          onClick={() => setShowForm(true)}
+        >
+          ＋ Add a new idea
+        </button>
+      )}
 
-      <div className="review-guide-table-wrap" style={{ marginTop: 18 }}>
-        <table className="review-guide-table">
-          <thead>
-            <tr>
-              <th style={{ width: '24%' }}>Feature</th>
-              <th>Request</th>
-              <th style={{ width: 110 }}>By</th>
-              <th style={{ width: 130 }}>Updated</th>
-              <th style={{ width: 110 }}></th>
-            </tr>
-          </thead>
-          <tbody>
-            {items.length === 0 && (
-              <tr>
-                <td colSpan={5} className="muted" style={{ padding: 18, textAlign: 'center' }}>
-                  No requests yet. Add the first one above.
-                </td>
-              </tr>
-            )}
-            {items.map((r) =>
-              editingId === r.id ? (
-                <RequestEditRow
-                  key={r.id}
-                  request={r}
-                  onCancel={() => setEditingId(null)}
-                  onSaved={(updated) => {
-                    setItems((prev) => prev.map((x) => (x.id === updated.id ? updated : x)));
-                    setEditingId(null);
-                  }}
-                />
-              ) : (
-                <tr key={r.id} className="review-guide-locked">
-                  <td className="strong">{r.feature}</td>
-                  <td className="multiline">{r.description}</td>
-                  <td>{r.author || <span className="muted">—</span>}</td>
-                  <td className="muted nowrap">{formatDate(r.updated_at)}</td>
-                  <td>
-                    <button
-                      type="button"
-                      className="btn ghost small"
-                      onClick={() => setEditingId(r.id)}
-                    >
-                      Edit
-                    </button>
-                  </td>
-                </tr>
-              )
-            )}
-          </tbody>
-        </table>
-      </div>
+      <ul className="review-cards" style={{ marginTop: 18 }}>
+        {items.length === 0 && (
+          <li className="review-empty">No ideas yet. Add the first one above.</li>
+        )}
+        {items.map((r) => (
+          <RequestCard
+            key={r.id}
+            request={r}
+            onUpdate={(u) => setItems((prev) => prev.map((x) => (x.id === u.id ? u : x)))}
+            onDelete={(id) => setItems((prev) => prev.filter((x) => x.id !== id))}
+          />
+        ))}
+      </ul>
     </>
   );
 };
 
-const NewRequestForm: React.FC<{ onSaved: (r: FeatureRequest) => void }> = ({ onSaved }) => {
-  const [feature, setFeature] = useState('');
-  const [description, setDescription] = useState('');
-  const [author, setAuthor] = useState('');
+const RequestCard: React.FC<{
+  request: FeatureRequest;
+  onUpdate: (r: FeatureRequest) => void;
+  onDelete: (id: number) => void;
+}> = ({ request, onUpdate, onDelete }) => {
+  const [editing, setEditing] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  if (editing) {
+    return (
+      <li className="review-card editing">
+        <RequestForm
+          initial={request}
+          submitLabel="Save changes"
+          onCancel={() => setEditing(false)}
+          onSubmit={async (b) => {
+            const updated = await reviewApi.updateRequest(request.id, b);
+            onUpdate(updated);
+            setEditing(false);
+          }}
+        />
+      </li>
+    );
+  }
+
+  const remove = async () => {
+    if (!confirm(`Delete the idea "${request.feature}"? This cannot be undone.`)) return;
+    setBusy(true);
+    try {
+      await reviewApi.deleteRequest(request.id);
+      onDelete(request.id);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <li className="review-card">
+      <div className="review-card-head">
+        <h3 className="review-card-title">{request.feature}</h3>
+        <p className="review-card-sub multiline">{request.description}</p>
+        <div className="review-card-meta">
+          {request.author ? <strong>{request.author}</strong> : <span className="muted">Anonymous</span>}
+          <span className="muted"> · {formatDate(request.updated_at)}</span>
+        </div>
+      </div>
+      <div className="review-row-actions">
+        <button type="button" className="btn ghost" onClick={() => setEditing(true)}>
+          ✏️ Edit
+        </button>
+        <button type="button" className="btn danger" onClick={remove} disabled={busy}>
+          🗑 Delete
+        </button>
+      </div>
+    </li>
+  );
+};
+
+// ────────────────────────────────────────────────────────────────────────────
+// Reusable bits
+// ────────────────────────────────────────────────────────────────────────────
+const NoteItem: React.FC<{
+  note: { id: number; comment: string; author: string | null; created_at: string };
+  onSave: (b: { comment: string; author?: string }) => Promise<void>;
+  onDelete: () => Promise<void>;
+}> = ({ note, onSave, onDelete }) => {
+  const [editing, setEditing] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  if (editing) {
+    return (
+      <li className="review-note editing">
+        <NoteForm
+          initial={{ comment: note.comment, author: note.author ?? '' }}
+          submitLabel="Save changes"
+          placeholder=""
+          onCancel={() => setEditing(false)}
+          onSubmit={async (b) => {
+            await onSave(b);
+            setEditing(false);
+          }}
+        />
+      </li>
+    );
+  }
+
+  const remove = async () => {
+    if (!confirm('Delete this note? This cannot be undone.')) return;
+    setBusy(true);
+    try { await onDelete(); } finally { setBusy(false); }
+  };
+
+  return (
+    <li className="review-note">
+      <div className="review-note-body">{note.comment}</div>
+      <div className="review-note-meta">
+        <span>
+          {note.author ? <strong>{note.author}</strong> : <span className="muted">Anonymous</span>}
+          <span className="muted"> · {formatDate(note.created_at)}</span>
+        </span>
+        <span className="review-note-actions">
+          <button type="button" className="btn ghost small" onClick={() => setEditing(true)}>
+            Edit
+          </button>
+          <button type="button" className="btn danger small" onClick={remove} disabled={busy}>
+            Delete
+          </button>
+        </span>
+      </div>
+    </li>
+  );
+};
+
+const NoteForm: React.FC<{
+  initial?: { comment: string; author: string };
+  placeholder: string;
+  submitLabel: string;
+  onCancel: () => void;
+  onSubmit: (b: { comment: string; author?: string }) => Promise<void>;
+}> = ({ initial, placeholder, submitLabel, onCancel, onSubmit }) => {
+  const [author, setAuthor] = useState(initial?.author ?? '');
+  const [comment, setComment] = useState(initial?.comment ?? '');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!comment.trim()) return;
+    setBusy(true);
+    setErr(null);
+    try {
+      await onSubmit({ comment: comment.trim(), author: author.trim() || undefined });
+    } catch (e) {
+      setErr(String(e));
+      setBusy(false);
+    }
+  };
+
+  return (
+    <form onSubmit={submit} className="review-form">
+      <label className="review-form-row">
+        <span>Your name (optional)</span>
+        <input
+          type="text"
+          value={author}
+          onChange={(e) => setAuthor(e.target.value)}
+          placeholder="e.g. Sam"
+        />
+      </label>
+      <label className="review-form-row">
+        <span>Your note</span>
+        <textarea
+          rows={3}
+          value={comment}
+          onChange={(e) => setComment(e.target.value)}
+          placeholder={placeholder}
+          required
+          autoFocus
+        />
+      </label>
+      {err && <div className="review-error inline">{err}</div>}
+      <div className="review-form-actions">
+        <button type="button" className="btn ghost" onClick={onCancel} disabled={busy}>
+          Cancel
+        </button>
+        <button type="submit" className="btn primary" disabled={busy || !comment.trim()}>
+          {busy ? 'Saving…' : submitLabel}
+        </button>
+      </div>
+    </form>
+  );
+};
+
+const RequestForm: React.FC<{
+  initial?: FeatureRequest;
+  submitLabel?: string;
+  onCancel: () => void;
+  onSubmit: (b: { feature: string; description: string; author?: string }) => Promise<void>;
+}> = ({ initial, submitLabel = 'Save my idea', onCancel, onSubmit }) => {
+  const [feature, setFeature] = useState(initial?.feature ?? '');
+  const [description, setDescription] = useState(initial?.description ?? '');
+  const [author, setAuthor] = useState(initial?.author ?? '');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -454,147 +606,63 @@ const NewRequestForm: React.FC<{ onSaved: (r: FeatureRequest) => void }> = ({ on
     setBusy(true);
     setErr(null);
     try {
-      const saved = await reviewApi.addRequest({
+      await onSubmit({
         feature: feature.trim(),
         description: description.trim(),
         author: author.trim() || undefined,
       });
-      onSaved(saved);
-      setFeature('');
-      setDescription('');
     } catch (e) {
       setErr(String(e));
-    } finally {
       setBusy(false);
     }
   };
 
   return (
-    <form onSubmit={submit} className="review-guide-form review-guide-new-request">
-      <div className="review-guide-form-grid">
+    <form onSubmit={submit} className="review-form review-form-card">
+      <label className="review-form-row">
+        <span>What do you want to call it?</span>
         <input
           type="text"
-          placeholder="Feature (short title)"
           value={feature}
           onChange={(e) => setFeature(e.target.value)}
+          placeholder="e.g. Dark mode"
+          required
+          autoFocus
+        />
+      </label>
+      <label className="review-form-row">
+        <span>Tell us more</span>
+        <textarea
+          rows={4}
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+          placeholder="Describe what you’d like added or changed…"
           required
         />
+      </label>
+      <label className="review-form-row">
+        <span>Your name (optional)</span>
         <input
           type="text"
-          placeholder="Your name (optional)"
           value={author}
           onChange={(e) => setAuthor(e.target.value)}
+          placeholder="e.g. Sam"
         />
-      </div>
-      <textarea
-        rows={3}
-        placeholder="Describe what you’d like added or changed…"
-        value={description}
-        onChange={(e) => setDescription(e.target.value)}
-        required
-      />
-      <div className="review-guide-form-row">
+      </label>
+      {err && <div className="review-error inline">{err}</div>}
+      <div className="review-form-actions">
+        <button type="button" className="btn ghost" onClick={onCancel} disabled={busy}>
+          Cancel
+        </button>
         <button
           type="submit"
           className="btn primary"
           disabled={busy || !feature.trim() || !description.trim()}
         >
-          {busy ? 'Saving\u2026' : 'Save request'}
+          {busy ? 'Saving…' : submitLabel}
         </button>
-        {err && <span className="review-guide-error inline">{err}</span>}
       </div>
     </form>
-  );
-};
-
-const RequestEditRow: React.FC<{
-  request: FeatureRequest;
-  onCancel: () => void;
-  onSaved: (r: FeatureRequest) => void;
-}> = ({ request, onCancel, onSaved }) => {
-  const [feature, setFeature] = useState(request.feature);
-  const [description, setDescription] = useState(request.description);
-  const [author, setAuthor] = useState(request.author ?? '');
-  const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
-
-  const save = async () => {
-    if (!feature.trim() || !description.trim()) return;
-    setBusy(true);
-    setErr(null);
-    try {
-      const updated = await reviewApi.updateRequest(request.id, {
-        feature: feature.trim(),
-        description: description.trim(),
-        author: author.trim() || undefined,
-      });
-      onSaved(updated);
-    } catch (e) {
-      setErr(String(e));
-      setBusy(false);
-    }
-  };
-
-  return (
-    <tr className="review-guide-editing">
-      <td>
-        <input
-          type="text"
-          value={feature}
-          onChange={(e) => setFeature(e.target.value)}
-          aria-label="Feature"
-        />
-      </td>
-      <td>
-        <textarea
-          rows={3}
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-          aria-label="Description"
-        />
-        {err && <div className="review-guide-error inline">{err}</div>}
-      </td>
-      <td>
-        <input
-          type="text"
-          value={author}
-          onChange={(e) => setAuthor(e.target.value)}
-          aria-label="Author"
-          placeholder="Name"
-        />
-      </td>
-      <td className="muted nowrap">{formatDate(request.updated_at)}</td>
-      <td>
-        <div className="review-guide-edit-actions">
-          <button type="button" className="btn primary small" onClick={save} disabled={busy}>
-            {busy ? 'Saving\u2026' : 'Save'}
-          </button>
-          <button type="button" className="btn ghost small" onClick={onCancel} disabled={busy}>
-            Cancel
-          </button>
-        </div>
-      </td>
-    </tr>
-  );
-};
-
-// ── Helpers ─────────────────────────────────────────────────────────────────
-const NoteList: React.FC<{ notes: { author: string | null; body: string; when: string }[] }> = ({
-  notes,
-}) => {
-  if (notes.length === 0) return null;
-  return (
-    <ul className="review-guide-notes">
-      {notes.map((n, i) => (
-        <li key={i}>
-          <div className="review-guide-note-meta">
-            <strong>{n.author || 'Anonymous'}</strong>
-            <span className="muted"> \u00b7 {formatDate(n.when)}</span>
-          </div>
-          <div>{n.body}</div>
-        </li>
-      ))}
-    </ul>
   );
 };
 
