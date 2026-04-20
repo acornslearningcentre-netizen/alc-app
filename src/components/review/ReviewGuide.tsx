@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { CLICKABLE_AREAS, FEATURES } from './inventory';
 import {
   reviewApi,
@@ -8,6 +8,84 @@ import {
 } from './api';
 
 type Tab = 'areas' | 'features' | 'requests';
+
+// ── In-app confirm dialog ─────────────────────────────────────────────────
+interface ConfirmOptions {
+  title: string;
+  message: string;
+  confirmLabel?: string;
+  cancelLabel?: string;
+  danger?: boolean;
+}
+
+const ConfirmCtx = createContext<(opts: ConfirmOptions) => Promise<boolean>>(
+  () => Promise.resolve(false)
+);
+
+const useConfirm = () => useContext(ConfirmCtx);
+
+const ConfirmProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [state, setState] = useState<(ConfirmOptions & { resolve: (v: boolean) => void }) | null>(null);
+  const confirm = useCallback((opts: ConfirmOptions) => {
+    return new Promise<boolean>((resolve) => setState({ ...opts, resolve }));
+  }, []);
+
+  const close = (value: boolean) => {
+    state?.resolve(value);
+    setState(null);
+  };
+
+  useEffect(() => {
+    if (!state) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') close(false);
+      if (e.key === 'Enter') close(true);
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  });
+
+  return (
+    <ConfirmCtx.Provider value={confirm}>
+      {children}
+      {state && (
+        <div
+          className="review-confirm-scrim"
+          role="presentation"
+          onClick={(e) => { if (e.target === e.currentTarget) close(false); }}
+        >
+          <div
+            className="review-confirm"
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="review-confirm-title"
+            aria-describedby="review-confirm-message"
+          >
+            <h3 id="review-confirm-title" className="review-confirm-title">{state.title}</h3>
+            <p id="review-confirm-message" className="review-confirm-message">{state.message}</p>
+            <div className="review-confirm-actions">
+              <button
+                type="button"
+                className="btn ghost"
+                onClick={() => close(false)}
+                autoFocus
+              >
+                {state.cancelLabel ?? 'Cancel'}
+              </button>
+              <button
+                type="button"
+                className={`btn ${state.danger ? 'danger' : 'primary'}`}
+                onClick={() => close(true)}
+              >
+                {state.confirmLabel ?? 'OK'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </ConfirmCtx.Provider>
+  );
+};
 
 const areaKey = (a: { role: string; screen: string; element: string }) =>
   `${a.role}/${a.screen}/${a.element}`;
@@ -80,11 +158,13 @@ export const ReviewGuide: React.FC = () => {
             <Tab active={tab === 'requests'} onClick={() => setTab('requests')} label="Your ideas" hint="Suggest something new" />
           </nav>
 
-          <main className="review-page-body">
-            {tab === 'areas' && <AreasSection />}
-            {tab === 'features' && <FeaturesSection />}
-            {tab === 'requests' && <RequestsSection />}
-          </main>
+          <ConfirmProvider>
+            <main className="review-page-body">
+              {tab === 'areas' && <AreasSection />}
+              {tab === 'features' && <FeaturesSection />}
+              {tab === 'requests' && <RequestsSection />}
+            </main>
+          </ConfirmProvider>
         </div>
       )}
     </>
@@ -422,6 +502,7 @@ const RequestCard: React.FC<{
 }> = ({ request, onUpdate, onDelete }) => {
   const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState(false);
+  const confirm = useConfirm();
 
   if (editing) {
     return (
@@ -441,7 +522,14 @@ const RequestCard: React.FC<{
   }
 
   const remove = async () => {
-    if (!confirm(`Delete the idea "${request.feature}"? This cannot be undone.`)) return;
+    const ok = await confirm({
+      title: 'Delete this idea?',
+      message: `“${request.feature}” will be removed for everyone. This cannot be undone.`,
+      confirmLabel: 'Delete',
+      cancelLabel: 'Keep it',
+      danger: true,
+    });
+    if (!ok) return;
     setBusy(true);
     try {
       await reviewApi.deleteRequest(request.id);
@@ -483,6 +571,7 @@ const NoteItem: React.FC<{
 }> = ({ note, onSave, onDelete }) => {
   const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState(false);
+  const confirm = useConfirm();
 
   if (editing) {
     return (
@@ -502,7 +591,14 @@ const NoteItem: React.FC<{
   }
 
   const remove = async () => {
-    if (!confirm('Delete this note? This cannot be undone.')) return;
+    const ok = await confirm({
+      title: 'Delete this note?',
+      message: 'It will be removed for everyone. This cannot be undone.',
+      confirmLabel: 'Delete',
+      cancelLabel: 'Keep it',
+      danger: true,
+    });
+    if (!ok) return;
     setBusy(true);
     try { await onDelete(); } finally { setBusy(false); }
   };

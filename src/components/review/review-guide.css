@@ -271,6 +271,48 @@ body.review-page-open { overflow: hidden; }
 }
 .btn.danger:hover { background: rgba(180, 60, 50, 0.16); }
 
+/* ── In-app confirm dialog (replaces the browser's native confirm) ───── */
+.review-confirm-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  background: rgba(20, 18, 14, 0.55);
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+.review-confirm {
+  width: min(420px, 100%);
+  background: var(--cream);
+  border-radius: 16px;
+  border: 1px solid var(--line);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.25);
+  padding: 22px 22px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.review-confirm-title {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 800;
+  color: var(--ink);
+}
+.review-confirm-message {
+  margin: 0;
+  color: var(--ink-2);
+  font-size: 14px;
+  line-height: 1.55;
+}
+.review-confirm-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 12px;
+  flex-wrap: wrap;
+}
+.review-confirm-actions .btn { min-width: 96px; }
+
 /* ── Errors ──────────────────────────────────────────────────────────── */
 .review-error {
   background: rgba(180, 60, 50, 0.08);
