@@ -1,27 +1,55 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useAppStore } from './store/app-store';
 import { LoginScreen } from './screens/login/LoginScreen';
 import { TeacherLayout } from './screens/teacher/TeacherLayout';
 import { ParentLayout } from './screens/parent/ParentLayout';
 import { StudentLayout } from './screens/student/StudentLayout';
 import { LeaderLayout } from './screens/leader/LeaderLayout';
+import { LoginV2 } from './screens/v2/login/LoginV2';
+import { TeacherLayoutV2 } from './screens/v2/teacher/TeacherLayoutV2';
+import { ParentLayoutV2 } from './screens/v2/parent/ParentLayoutV2';
+import { StudentLayoutV2 } from './screens/v2/student/StudentLayoutV2';
+import { LeaderLayoutV2 } from './screens/v2/leader/LeaderLayoutV2';
 import { ReviewGuide } from './components/review/ReviewGuide';
+import { VariantSwitch } from './components/v2/VariantSwitch';
 import type { Role } from './data/types';
+
+function useV2Path() {
+  const [isV2, setIsV2] = useState(() => window.location.pathname.startsWith('/v2'));
+  useEffect(() => {
+    const sync = () => setIsV2(window.location.pathname.startsWith('/v2'));
+    window.addEventListener('popstate', sync);
+    return () => window.removeEventListener('popstate', sync);
+  }, []);
+  return [isV2, (next: boolean) => {
+    const target = next ? '/v2' : '/';
+    if (window.location.pathname !== target) {
+      window.history.pushState({}, '', target);
+      setIsV2(next);
+    }
+  }] as const;
+}
 
 function App() {
   const { authed, role, variant, login } = useAppStore();
+  const [isV2, setIsV2] = useV2Path();
 
-  // Apply variant class to body
+  // Apply variant class to body (v1 calm/playful)
   useEffect(() => {
     document.body.classList.remove('variant-calm', 'variant-playful');
     document.body.classList.add(`variant-${variant}`);
   }, [variant]);
 
+  // Apply v2 class to body — scopes all v2 styles
+  useEffect(() => {
+    document.body.classList.toggle('v2', isV2);
+  }, [isV2]);
+
   const handleLogin = (r: Role, opts?: { childId?: string }) => {
     login(r, opts);
   };
 
-  const renderRole = () => {
+  const renderRoleV1 = () => {
     switch (role) {
       case 'teacher': return <TeacherLayout/>;
       case 'parent': return <ParentLayout/>;
@@ -31,10 +59,23 @@ function App() {
     }
   };
 
+  const renderRoleV2 = () => {
+    switch (role) {
+      case 'teacher': return <TeacherLayoutV2/>;
+      case 'parent':  return <ParentLayoutV2/>;
+      case 'student': return <StudentLayoutV2/>;
+      case 'leader':  return <LeaderLayoutV2/>;
+      default: return <TeacherLayoutV2/>;
+    }
+  };
+
   return (
     <>
-      {authed ? renderRole() : <LoginScreen onLogin={handleLogin}/>}
+      {isV2
+        ? (authed ? renderRoleV2() : <LoginV2 onLogin={handleLogin}/>)
+        : (authed ? renderRoleV1() : <LoginScreen onLogin={handleLogin}/>)}
       <ReviewGuide/>
+      <VariantSwitch isV2={isV2} onToggle={setIsV2}/>
     </>
   );
 }

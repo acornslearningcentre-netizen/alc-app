@@ -1,0 +1,76 @@
+/* Acorns v2 "Watercolor Glass" — tokens. Scoped under body.v2. */
+
+body.v2 {
+  --v2-canvas:        #F2EBDD;
+  --v2-canvas-2:      #EDE5D2;
+  --v2-vellum-solid:  #FAF6EB;
+  --v2-vellum:        rgba(251, 247, 236, 0.62);
+  --v2-vellum-strong: rgba(251, 247, 236, 0.82);
+  --v2-pith:          rgba(232, 223, 201, 0.55);
+
+  --v2-glass-top:     rgba(255, 255, 255, 0.72);
+  --v2-glass-edge:    rgba(255, 255, 255, 0.36);
+
+  --v2-ink:           #1A1F1B;
+  --v2-mist:          #5C5A55;
+  --v2-pencil:        #8E8B85;
+  --v2-stone:         #A6A89E;
+
+  --v2-hairline:      rgba(26, 31, 27, 0.08);
+  --v2-hairline-2:    rgba(26, 31, 27, 0.14);
+  --v2-veil:          rgba(26, 31, 27, 0.06);
+
+  --v2-moss:          #3F5C44;
+  --v2-moss-2:        #355038;
+  --v2-moss-soft:     rgba(63, 92, 68, 0.10);
+  --v2-moss-ring:     rgba(63, 92, 68, 0.20);
+  --v2-moss-ink:      #E2EBE0;
+
+  --v2-terra:         #B85D38;
+  --v2-terra-soft:    rgba(184, 93, 56, 0.12);
+  --v2-terra-ink:     #FAE3D8;
+
+  /* Watercolor blob tints */
+  --v2-wc-sage:  rgba(159, 179, 154, 0.30);
+  --v2-wc-ochre: rgba(217, 164, 65, 0.22);
+  --v2-wc-plum:  rgba(142, 110, 134, 0.22);
+  --v2-wc-sky:   rgba(127, 168, 193, 0.22);
+
+  /* Compatibility aliases — old class names still resolve */
+  --v2-paper:         var(--v2-canvas);
+  --v2-linen:         var(--v2-vellum-solid);
+  --v2-whisper:       var(--v2-canvas-2);
+  --v2-bone:          var(--v2-canvas);
+  --v2-tangerine:     var(--v2-terra);
+  --v2-tangerine-soft:var(--v2-terra-soft);
+  --v2-tangerine-ink: var(--v2-terra-ink);
+  --v2-ultramarine:   var(--v2-moss);
+  --v2-ultramarine-soft: var(--v2-moss-soft);
+  --v2-ultramarine-ink:  var(--v2-moss-ink);
+  --v2-ember:         var(--v2-terra);
+  --v2-ember-soft:    var(--v2-terra-soft);
+  --v2-ember-ink:     var(--v2-terra-ink);
+
+  --v2-r-sm:    8px;
+  --v2-r-md:    14px;
+  --v2-r-lg:    20px;
+  --v2-r-xl:    28px;
+  --v2-r-pill:  999px;
+
+  --v2-shadow:       0 1px 0 var(--v2-glass-edge) inset, 0 6px 24px -10px rgba(26,31,27,0.10);
+  --v2-shadow-lift:  0 1px 0 var(--v2-glass-top) inset, 0 18px 38px -16px rgba(26,31,27,0.18);
+  --v2-shadow-deep:  0 1px 0 var(--v2-glass-edge) inset, 0 28px 60px -24px rgba(26,31,27,0.24);
+
+  --v2-blur:         blur(14px) saturate(140%);
+  --v2-blur-strong:  blur(18px) saturate(160%);
+
+  --v2-spring:    cubic-bezier(0.32, 0.72, 0, 1);
+  --v2-ease:      cubic-bezier(0.4, 0, 0.2, 1);
+  --v2-dur-fast:  180ms;
+  --v2-dur:       240ms;
+  --v2-dur-lg:    420ms;
+
+  --v2-display: 'Nunito', 'Geist', system-ui, -apple-system, sans-serif;
+  --v2-body:    'Geist', 'Nunito', system-ui, -apple-system, sans-serif;
+  --v2-mono:    'Geist Mono', 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+}

@@ -1,0 +1,374 @@
+/* Acorns v2 "Watercolor Glass" — base layer. Scoped under body.v2. */
+
+body.v2 {
+  background: var(--v2-canvas);
+  color: var(--v2-ink);
+  font-family: var(--v2-body);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  position: relative;
+}
+
+body.v2 *,
+body.v2 *::before,
+body.v2 *::after {
+  box-sizing: border-box;
+}
+
+body.v2 a { color: var(--v2-moss); text-decoration: none; }
+body.v2 a:hover { text-decoration: underline; text-underline-offset: 3px; }
+
+body.v2 ::selection { background: var(--v2-moss); color: var(--v2-vellum-solid); }
+
+/* ── Watercolor canvas ────────────────────────────────────────────────
+   Four soft blobs slowly drift behind everything. A tiny grain layer on
+   top adds tactility. Both layers are non-interactive and respect
+   prefers-reduced-motion. */
+
+body.v2::before {
+  content: '';
+  position: fixed;
+  inset: -10vh -10vw;
+  background:
+    radial-gradient(40vw 38vw at 12% 18%, var(--v2-wc-sage),  transparent 60%),
+    radial-gradient(46vw 42vw at 88% 14%, var(--v2-wc-ochre), transparent 60%),
+    radial-gradient(40vw 36vw at 18% 86%, var(--v2-wc-plum),  transparent 60%),
+    radial-gradient(48vw 40vw at 82% 90%, var(--v2-wc-sky),   transparent 60%);
+  filter: blur(40px) saturate(115%);
+  pointer-events: none;
+  z-index: 0;
+  animation: v2-drift 90s ease-in-out infinite alternate;
+}
+body.v2::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image:
+    radial-gradient(rgba(26,31,27,0.04) 1px, transparent 1px);
+  background-size: 4px 4px;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.55;
+  mix-blend-mode: multiply;
+}
+@keyframes v2-drift {
+  0%   { transform: translate3d(-2%, -1%, 0) scale(1.02); }
+  50%  { transform: translate3d( 2%,  1%, 0) scale(1.05); }
+  100% { transform: translate3d(-1%,  2%, 0) scale(1.03); }
+}
+
+body.v2 > * { position: relative; z-index: 1; }
+
+/* ── Type ─────────────────────────────────────────────────────────── */
+
+body.v2 .v2-eyebrow,
+body.v2 .v2-signature {
+  font-family: var(--v2-mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--v2-mist);
+}
+
+body.v2 .v2-display {
+  font-family: var(--v2-display);
+  font-weight: 900;
+  letter-spacing: -0.03em;
+  line-height: 1.0;
+  color: var(--v2-ink);
+}
+
+body.v2 .v2-h1 {
+  font-family: var(--v2-display);
+  font-weight: 900;
+  letter-spacing: -0.025em;
+  line-height: 1.04;
+  color: var(--v2-ink);
+  margin: 0;
+}
+
+body.v2 .v2-h2 {
+  font-family: var(--v2-display);
+  font-weight: 800;
+  letter-spacing: -0.018em;
+  line-height: 1.12;
+  font-size: clamp(22px, 2.6vw, 30px);
+  margin: 0;
+}
+
+body.v2 .v2-h3 {
+  font-family: var(--v2-display);
+  font-weight: 800;
+  letter-spacing: -0.012em;
+  line-height: 1.18;
+  font-size: 18px;
+  margin: 0;
+}
+
+body.v2 .v2-body {
+  font-family: var(--v2-body);
+  font-size: 14.5px;
+  line-height: 1.55;
+  color: var(--v2-mist);
+  max-width: 60ch;
+}
+
+body.v2 .v2-mono {
+  font-family: var(--v2-mono);
+  font-feature-settings: 'tnum';
+}
+
+/* ── Section signature (kept as a soft eyebrow now, no terminal vibes) */
+
+body.v2 .v2-sig {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--v2-mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+  color: var(--v2-pencil);
+  margin-bottom: 14px;
+  width: 100%;
+}
+body.v2 .v2-sig .num { color: var(--v2-moss); font-weight: 600; }
+body.v2 .v2-sig .em  { color: var(--v2-mist); font-weight: 600; }
+body.v2 .v2-sig .spacer { flex: 1; }
+
+/* ── Surfaces — frosted glass cards ────────────────────────────────── */
+
+body.v2 .v2-card,
+body.v2 .v2-section,
+body.v2 .v2-stat-block,
+body.v2 .v2-flow,
+body.v2 .v2-obs-card {
+  position: relative;
+  background: var(--v2-vellum);
+  -webkit-backdrop-filter: var(--v2-blur);
+  backdrop-filter: var(--v2-blur);
+  border: 1px solid var(--v2-glass-edge);
+  border-radius: var(--v2-r-xl);
+  padding: 24px;
+  box-shadow: var(--v2-shadow);
+  transition: transform var(--v2-dur) var(--v2-spring),
+              box-shadow var(--v2-dur) var(--v2-spring),
+              border-color var(--v2-dur) var(--v2-spring);
+}
+/* Top highlight gives the glass an edge */
+body.v2 .v2-card::before,
+body.v2 .v2-stat-block::before,
+body.v2 .v2-flow::before,
+body.v2 .v2-obs-card::before {
+  content: '';
+  position: absolute;
+  inset: 1px 1px auto 1px;
+  height: 50%;
+  border-radius: calc(var(--v2-r-xl) - 1px) calc(var(--v2-r-xl) - 1px) 0 0;
+  background: linear-gradient(180deg, var(--v2-glass-top), transparent 70%);
+  pointer-events: none;
+  opacity: 0.7;
+}
+
+body.v2 .v2-card.hoverable:hover,
+body.v2 .v2-stat-block:hover,
+body.v2 .v2-obs-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--v2-shadow-lift);
+}
+
+body.v2 .v2-divider { height: 1px; background: var(--v2-hairline); border: 0; }
+
+/* ── Buttons — soft pill ───────────────────────────────────────────── */
+
+body.v2 .v2-btn {
+  font-family: var(--v2-body);
+  font-size: 14px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 11px 18px;
+  border-radius: var(--v2-r-pill);
+  border: 1px solid var(--v2-glass-edge);
+  background: var(--v2-vellum-strong);
+  -webkit-backdrop-filter: var(--v2-blur);
+  backdrop-filter: var(--v2-blur);
+  color: var(--v2-ink);
+  cursor: pointer;
+  transition: transform var(--v2-dur-fast) var(--v2-spring),
+              background var(--v2-dur-fast) var(--v2-spring),
+              border-color var(--v2-dur-fast) var(--v2-spring);
+}
+body.v2 .v2-btn:hover { background: rgba(232, 223, 201, 0.65); }
+body.v2 .v2-btn:active { transform: translateY(1px); }
+
+body.v2 .v2-btn.primary {
+  background: linear-gradient(180deg, #4D6B52 0%, var(--v2-moss) 100%);
+  color: var(--v2-moss-ink);
+  border-color: transparent;
+  box-shadow: 0 1px 0 rgba(255,255,255,0.25) inset, 0 6px 18px -8px rgba(63,92,68,0.55);
+}
+body.v2 .v2-btn.primary:hover { background: linear-gradient(180deg, #466048 0%, var(--v2-moss-2) 100%); }
+
+body.v2 .v2-btn.ghost {
+  background: transparent;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  border-color: transparent;
+  color: var(--v2-mist);
+  padding: 9px 12px;
+}
+body.v2 .v2-btn.ghost:hover { color: var(--v2-ink); background: var(--v2-vellum); }
+
+body.v2 .v2-btn:focus-visible {
+  outline: none;
+  border-color: var(--v2-moss);
+  box-shadow: 0 0 0 3px var(--v2-moss-ring);
+}
+
+/* ── Chips — soft glass pills ──────────────────────────────────────── */
+
+body.v2 .v2-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.005em;
+  padding: 4px 11px;
+  border-radius: var(--v2-r-pill);
+  border: 1px solid var(--v2-hairline);
+  background: var(--v2-vellum);
+  -webkit-backdrop-filter: var(--v2-blur);
+  backdrop-filter: var(--v2-blur);
+  color: var(--v2-mist);
+}
+
+body.v2 .v2-chip.solid {
+  background: var(--v2-pith);
+  border-color: transparent;
+  color: var(--v2-ink);
+}
+body.v2 .v2-chip.tangerine,
+body.v2 .v2-chip.ember,
+body.v2 .v2-chip.terra {
+  background: var(--v2-terra);
+  border-color: transparent;
+  color: var(--v2-terra-ink);
+  font-weight: 600;
+}
+body.v2 .v2-chip.tangerine-soft,
+body.v2 .v2-chip.terra-soft {
+  background: var(--v2-terra-soft);
+  border-color: transparent;
+  color: var(--v2-terra);
+  font-weight: 600;
+}
+body.v2 .v2-chip.ultramarine,
+body.v2 .v2-chip.moss {
+  background: var(--v2-moss);
+  border-color: transparent;
+  color: var(--v2-moss-ink);
+  font-weight: 600;
+}
+body.v2 .v2-chip.ultramarine-soft,
+body.v2 .v2-chip.moss-soft {
+  background: var(--v2-moss-soft);
+  border-color: transparent;
+  color: var(--v2-moss);
+  font-weight: 600;
+}
+
+/* ── Inputs ────────────────────────────────────────────────────────── */
+
+body.v2 .v2-field-label {
+  font-family: var(--v2-mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+  color: var(--v2-pencil);
+  margin-bottom: 10px;
+  display: block;
+}
+
+body.v2 .v2-input {
+  width: 100%;
+  font-family: var(--v2-body);
+  font-size: 15px;
+  color: var(--v2-ink);
+  background: var(--v2-vellum);
+  -webkit-backdrop-filter: var(--v2-blur);
+  backdrop-filter: var(--v2-blur);
+  border: 1px solid var(--v2-glass-edge);
+  border-radius: var(--v2-r-md);
+  padding: 12px 14px;
+  transition: border-color var(--v2-dur-fast) var(--v2-spring),
+              box-shadow var(--v2-dur-fast) var(--v2-spring);
+}
+body.v2 .v2-input:focus {
+  outline: none;
+  border-color: var(--v2-moss);
+  box-shadow: 0 0 0 3px var(--v2-moss-ring);
+}
+
+/* ── Layout helpers ────────────────────────────────────────────────── */
+
+body.v2 .v2-container {
+  max-width: 1320px;
+  margin: 0 auto;
+  padding: clamp(20px, 4vw, 40px);
+  position: relative;
+  z-index: 1;
+}
+
+body.v2 .v2-row { display: flex; align-items: center; gap: 12px; }
+body.v2 .v2-row.between { justify-content: space-between; }
+body.v2 .v2-row.wrap { flex-wrap: wrap; }
+
+/* ── Cascade reveal ────────────────────────────────────────────────── */
+
+@media (prefers-reduced-motion: no-preference) {
+  body.v2 .v2-cascade > * {
+    opacity: 0;
+    transform: translateY(8px);
+    animation: v2-rise var(--v2-dur-lg) var(--v2-spring) forwards;
+  }
+  body.v2 .v2-cascade > *:nth-child(1) { animation-delay: 40ms; }
+  body.v2 .v2-cascade > *:nth-child(2) { animation-delay: 80ms; }
+  body.v2 .v2-cascade > *:nth-child(3) { animation-delay: 120ms; }
+  body.v2 .v2-cascade > *:nth-child(4) { animation-delay: 160ms; }
+  body.v2 .v2-cascade > *:nth-child(5) { animation-delay: 200ms; }
+  body.v2 .v2-cascade > *:nth-child(6) { animation-delay: 240ms; }
+}
+@keyframes v2-rise { to { opacity: 1; transform: translateY(0); } }
+
+/* ── Reduced motion ────────────────────────────────────────────────── */
+
+@media (prefers-reduced-motion: reduce) {
+  body.v2::before { animation: none; }
+  body.v2 *,
+  body.v2 *::before,
+  body.v2 *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ── Skeleton ──────────────────────────────────────────────────────── */
+
+body.v2 .v2-skeleton {
+  background: linear-gradient(90deg, var(--v2-pith) 0%, var(--v2-vellum-solid) 50%, var(--v2-pith) 100%);
+  background-size: 200% 100%;
+  animation: v2-shimmer 1.6s linear infinite;
+  border-radius: var(--v2-r-md);
+}
+@keyframes v2-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
