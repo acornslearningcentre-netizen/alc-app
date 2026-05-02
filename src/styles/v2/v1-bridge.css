@@ -1,0 +1,587 @@
+/* Acorns v2 "Watercolor Glass" — v1 → v2 bridge.
+   Retones every v1 class under body.v2 so every existing v1 screen
+   (Parent, Student, Leader, plus inner Teacher views) inherits the
+   Watercolor Glass look without rewriting the components. */
+
+/* ── Shell ───────────────────────────────────────────────────────────── */
+
+body.v2 .app {
+  background: transparent;
+  position: relative;
+  z-index: 1;
+}
+
+body.v2 .sidebar,
+body.v2 .drawer {
+  background: var(--v2-vellum);
+  -webkit-backdrop-filter: var(--v2-blur-strong);
+  backdrop-filter: var(--v2-blur-strong);
+  border-right: 1px solid var(--v2-glass-edge);
+  padding: 24px 16px;
+  gap: 18px;
+}
+
+body.v2 .main {
+  background: transparent;
+  padding: clamp(24px, 4vw, 44px);
+  max-width: 1480px;
+}
+
+/* ── Brand mark (replace ink square with Moss gradient) ─────────────── */
+
+body.v2 .brand {
+  font-family: var(--v2-display);
+  font-weight: 900;
+  font-size: 19px;
+  letter-spacing: -0.022em;
+  gap: 10px;
+}
+body.v2 .brand-mark {
+  background: linear-gradient(180deg, #4D6B52, var(--v2-moss));
+  color: var(--v2-moss-ink);
+  border-radius: 9px;
+  box-shadow: 0 1px 0 rgba(255,255,255,0.25) inset, 0 6px 14px -6px rgba(63,92,68,0.5);
+  font-family: var(--v2-display);
+  font-weight: 900;
+}
+
+/* ── Sidebar nav ────────────────────────────────────────────────────── */
+
+body.v2 .nav-label {
+  font-family: var(--v2-mono);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  color: var(--v2-stone);
+  padding: 8px 12px 4px;
+}
+
+body.v2 .nav-item {
+  font-family: var(--v2-body);
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--v2-mist);
+  border-radius: var(--v2-r-pill);
+  padding: 10px 14px;
+  transition: background var(--v2-dur-fast) var(--v2-spring),
+              color var(--v2-dur-fast) var(--v2-spring);
+}
+body.v2 .nav-item:hover { background: var(--v2-pith); color: var(--v2-ink); }
+body.v2 .nav-item.active {
+  background: linear-gradient(180deg, #4D6B52, var(--v2-moss));
+  color: var(--v2-moss-ink);
+  font-weight: 600;
+  box-shadow: 0 1px 0 rgba(255,255,255,0.25) inset, 0 8px 20px -10px rgba(63,92,68,0.55);
+}
+body.v2 .nav-item .dot {
+  font-family: var(--v2-mono);
+  font-size: 11px;
+  font-weight: 600;
+  background: var(--v2-pith);
+  color: var(--v2-ink);
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+body.v2 .nav-item.active .dot {
+  background: rgba(255,255,255,0.18);
+  color: var(--v2-moss-ink);
+}
+
+body.v2 .role-pill {
+  margin-top: auto;
+  background: var(--v2-vellum);
+  -webkit-backdrop-filter: var(--v2-blur);
+  backdrop-filter: var(--v2-blur);
+  border: 1px solid var(--v2-glass-edge);
+  border-radius: var(--v2-r-md);
+  font-size: 13px;
+}
+body.v2 .role-pill .avatar {
+  background: linear-gradient(180deg, #4D6B52, var(--v2-moss));
+  color: var(--v2-moss-ink);
+  border-radius: 999px;
+  font-family: var(--v2-mono);
+  font-weight: 600;
+  font-size: 11.5px;
+}
+
+/* ── Topbar / page heading ─────────────────────────────────────────── */
+
+body.v2 .topbar h1 {
+  font-family: var(--v2-display);
+  font-weight: 900;
+  font-size: clamp(28px, 3.6vw, 40px);
+  letter-spacing: -0.028em;
+  line-height: 1.04;
+}
+body.v2 .topbar .sub {
+  font-family: var(--v2-mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  color: var(--v2-mist);
+  margin-top: 8px;
+}
+
+body.v2 h2,
+body.v2 h3 {
+  font-family: var(--v2-display);
+  font-weight: 800;
+  letter-spacing: -0.014em;
+}
+
+/* ── Buttons ───────────────────────────────────────────────────────── */
+
+body.v2 .btn {
+  font-family: var(--v2-body);
+  font-size: 13.5px;
+  font-weight: 600;
+  border-radius: var(--v2-r-pill);
+  padding: 10px 16px;
+  background: var(--v2-vellum-strong);
+  -webkit-backdrop-filter: var(--v2-blur);
+  backdrop-filter: var(--v2-blur);
+  border: 1px solid var(--v2-glass-edge);
+  color: var(--v2-ink);
+  transition: transform var(--v2-dur-fast) var(--v2-spring),
+              background var(--v2-dur-fast) var(--v2-spring),
+              border-color var(--v2-dur-fast) var(--v2-spring);
+}
+body.v2 .btn:hover { background: rgba(232, 223, 201, 0.65); }
+body.v2 .btn:active { transform: translateY(1px); }
+body.v2 .btn.primary {
+  background: linear-gradient(180deg, #4D6B52 0%, var(--v2-moss) 100%);
+  color: var(--v2-moss-ink);
+  border-color: transparent;
+  box-shadow: 0 1px 0 rgba(255,255,255,0.25) inset, 0 6px 18px -8px rgba(63,92,68,0.55);
+}
+body.v2 .btn.primary:hover { background: linear-gradient(180deg, #466048 0%, var(--v2-moss-2) 100%); }
+body.v2 .btn.ghost {
+  background: transparent;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  border-color: transparent;
+  color: var(--v2-mist);
+}
+body.v2 .btn.ghost:hover { color: var(--v2-ink); background: var(--v2-vellum); }
+body.v2 .btn.tone {
+  background: var(--v2-moss-soft);
+  color: var(--v2-moss);
+  border-color: transparent;
+  font-weight: 600;
+}
+body.v2 .btn.danger {
+  background: var(--v2-terra);
+  color: var(--v2-terra-ink);
+  border-color: transparent;
+}
+
+/* ── Cards ─────────────────────────────────────────────────────────── */
+
+body.v2 .card,
+body.v2 .child-card,
+body.v2 .ai-panel,
+body.v2 .composer {
+  position: relative;
+  background: var(--v2-vellum);
+  -webkit-backdrop-filter: var(--v2-blur);
+  backdrop-filter: var(--v2-blur);
+  border: 1px solid var(--v2-glass-edge);
+  border-radius: var(--v2-r-xl);
+  box-shadow: var(--v2-shadow);
+  padding: 22px;
+  transition: transform var(--v2-dur) var(--v2-spring),
+              box-shadow var(--v2-dur) var(--v2-spring),
+              border-color var(--v2-dur) var(--v2-spring);
+}
+body.v2 .card::before,
+body.v2 .child-card::before,
+body.v2 .ai-panel::before,
+body.v2 .composer::before {
+  content: '';
+  position: absolute;
+  inset: 1px 1px auto 1px;
+  height: 50%;
+  border-radius: calc(var(--v2-r-xl) - 1px) calc(var(--v2-r-xl) - 1px) 0 0;
+  background: linear-gradient(180deg, var(--v2-glass-top), transparent 70%);
+  pointer-events: none;
+  opacity: 0.6;
+  z-index: 0;
+}
+body.v2 .card > *,
+body.v2 .child-card > *,
+body.v2 .ai-panel > *,
+body.v2 .composer > * { position: relative; z-index: 1; }
+
+body.v2 .ai-panel {
+  background: linear-gradient(180deg, rgba(63,92,68,0.92), rgba(53,80,56,0.92));
+  -webkit-backdrop-filter: var(--v2-blur-strong);
+  backdrop-filter: var(--v2-blur-strong);
+  color: var(--v2-moss-ink);
+  border-color: rgba(255,255,255,0.10);
+  box-shadow: 0 1px 0 rgba(255,255,255,0.10) inset, 0 18px 38px -16px rgba(53,80,56,0.45);
+}
+body.v2 .ai-panel::before { display: none; }
+body.v2 .ai-panel a { color: var(--v2-terra-ink); }
+
+body.v2 .ai-badge {
+  background: rgba(255,255,255,0.14);
+  color: var(--v2-moss-ink);
+  font-family: var(--v2-mono);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  border-radius: 999px;
+  padding: 4px 10px;
+}
+
+/* ── Chips ─────────────────────────────────────────────────────────── */
+
+body.v2 .chip {
+  font-family: var(--v2-body);
+  font-size: 12px;
+  font-weight: 500;
+  border-radius: var(--v2-r-pill);
+  padding: 4px 11px;
+  background: var(--v2-vellum);
+  -webkit-backdrop-filter: var(--v2-blur);
+  backdrop-filter: var(--v2-blur);
+  border: 1px solid var(--v2-hairline);
+  color: var(--v2-mist);
+}
+body.v2 .chip.tone {
+  background: var(--v2-moss-soft);
+  border-color: transparent;
+  color: var(--v2-moss);
+  font-weight: 600;
+}
+body.v2 .chip.dot::before {
+  background: var(--tone, var(--v2-moss));
+}
+
+/* ── Stat number / labels ──────────────────────────────────────────── */
+
+body.v2 .stat-number {
+  font-family: var(--v2-display);
+  font-weight: 900;
+  font-size: 44px;
+  line-height: 0.96;
+  letter-spacing: -0.028em;
+  color: var(--v2-moss);
+  font-variant-numeric: tabular-nums;
+}
+body.v2 .stat-label,
+body.v2 .tiny {
+  font-family: var(--v2-mono);
+  font-size: 11px;
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+  color: var(--v2-pencil);
+}
+body.v2 .muted { color: var(--v2-pencil); }
+body.v2 .mono  { font-family: var(--v2-mono); }
+
+/* ── Avatars ───────────────────────────────────────────────────────── */
+
+body.v2 .avatar-lg,
+body.v2 .avatar-xl,
+body.v2 .role-pill .avatar {
+  background: var(--v2-pith);
+  color: var(--v2-mist);
+  font-family: var(--v2-mono);
+  font-weight: 600;
+  border-radius: 999px;
+}
+
+/* Hide inline danger chips on list rows (e.g. "attention-pattern",
+   "mood-shift") under v2 — they read as alarms AND make flagged rows wider
+   than the rest, breaking column alignment. The "Flagged" filter at the top
+   already exposes the same information without per-row noise. */
+body.v2 .chip[style*="danger"],
+body.v2 .chip[style*="--danger"] {
+  display: none !important;
+}
+
+/* Some rows render an inline empty <div style={{ width: 80 }}/> as a
+   right-side placeholder (so flagged + non-flagged rows align in v1). With
+   chips hidden under v2 we hide the placeholder too — otherwise flagged
+   rows lose their anchor and the flex:1 spacer pushes % columns rightward. */
+body.v2 .card .row > div:empty[style*="width"],
+body.v2 .v2-card .row > div:empty[style*="width"] {
+  display: none !important;
+}
+
+/* Hide the inline Trend chevron (^ / v / –) on list rows under v2.
+   The Trend component renders a bare <span> with this style signature. */
+body.v2 .card .row > span[style*="gap: 2"][style*="font-weight: 700"],
+body.v2 .v2-card .row > span[style*="gap: 2"][style*="font-weight: 700"] {
+  display: none !important;
+}
+
+/* Add horizontal breathing room between the row content and the card edge,
+   so initials avatars and trailing values aren't kissing the border. */
+body.v2 .card .row,
+body.v2 .v2-card .row {
+  padding-left: 14px !important;
+  padding-right: 14px !important;
+}
+
+/* Kill the inline `borderBottom: '1px dashed var(--line)'` that components
+   render between the first N-1 rows. With the row at row 1 visually capped
+   by the card's rounded top edge and the row at row N capped by nothing,
+   intermediate borders make first rows read as "framed boxes". Removing
+   them lets every row breathe equally — the surrounding card already
+   defines the section. */
+body.v2 .card .row,
+body.v2 .v2-card .row {
+  border-bottom: 0 !important;
+  border-top: 0 !important;
+}
+
+/* The bar's flex:1 wrapper is kept now that the bar is visible again. */
+
+/* ── Misc surfaces ─────────────────────────────────────────────────── */
+
+body.v2 .divider { background: var(--v2-hairline); }
+
+body.v2 .bar { background: var(--v2-pith); border-radius: 999px; }
+body.v2 .bar > span { background: linear-gradient(90deg, var(--v2-moss), #4D6B52); border-radius: 999px; }
+
+body.v2 .tabs {
+  background: var(--v2-vellum);
+  -webkit-backdrop-filter: var(--v2-blur);
+  backdrop-filter: var(--v2-blur);
+  border: 1px solid var(--v2-glass-edge);
+  border-radius: var(--v2-r-pill);
+  padding: 4px;
+}
+body.v2 .tabs button { border-radius: var(--v2-r-pill); font-family: var(--v2-body); font-weight: 500; }
+body.v2 .tabs button.active {
+  background: linear-gradient(180deg, #4D6B52, var(--v2-moss));
+  color: var(--v2-moss-ink);
+}
+
+/* ── Inputs ────────────────────────────────────────────────────────── */
+
+body.v2 input[type="text"],
+body.v2 input[type="email"],
+body.v2 input[type="password"],
+body.v2 input[type="search"],
+body.v2 input[type="number"],
+body.v2 textarea,
+body.v2 select {
+  font-family: var(--v2-body);
+  font-size: 14.5px;
+  background: var(--v2-vellum);
+  -webkit-backdrop-filter: var(--v2-blur);
+  backdrop-filter: var(--v2-blur);
+  border: 1px solid var(--v2-glass-edge);
+  border-radius: var(--v2-r-md);
+  padding: 11px 14px;
+  color: var(--v2-ink);
+  transition: border-color var(--v2-dur-fast) var(--v2-spring),
+              box-shadow var(--v2-dur-fast) var(--v2-spring);
+}
+body.v2 input:focus,
+body.v2 textarea:focus,
+body.v2 select:focus {
+  outline: none;
+  border-color: var(--v2-moss);
+  box-shadow: 0 0 0 3px var(--v2-moss-ring);
+}
+
+/* ── Mic / waveform / composer accents ─────────────────────────────── */
+
+body.v2 .mic-button {
+  background: linear-gradient(180deg, #4D6B52, var(--v2-moss));
+  color: var(--v2-moss-ink);
+  border-radius: 999px;
+  box-shadow: 0 1px 0 rgba(255,255,255,0.25) inset, 0 6px 18px -8px rgba(63,92,68,0.55);
+}
+body.v2 .mic-button.recording {
+  background: linear-gradient(180deg, #C8623E, #A24A2D);
+  color: var(--v2-terra-ink);
+}
+
+body.v2 .waveform .spark { background: var(--v2-moss); }
+body.v2 .waveform.active .spark { background: var(--v2-terra); }
+
+/* ── Mobile drawer + topbar ────────────────────────────────────────── */
+
+body.v2 .drawer-scrim { background: rgba(26,31,27,0.36); -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px); }
+
+body.v2 .mobile-topbar {
+  background: var(--v2-vellum);
+  -webkit-backdrop-filter: var(--v2-blur);
+  backdrop-filter: var(--v2-blur);
+  border-bottom: 1px solid var(--v2-glass-edge);
+}
+
+/* ── Tone helpers — under v2 we collapse the v1 rainbow palette to a
+   single calm Mist tone. Multi-coloured sparklines, dots and pills all
+   become one neutral stroke so dense list pages read as one quiet field. */
+
+body.v2 .tone-sage,
+body.v2 .tone-ochre,
+body.v2 .tone-plum,
+body.v2 .tone-sky {
+  --tone: var(--v2-mist);
+  --tone-soft: var(--v2-pith);
+  --tone-ink: var(--v2-mist);
+}
+
+/* Sparklines — hidden under v2. They're redundant with the explicit trend
+   arrow (^ / v / –) and the percentage, and they read as decorative noise
+   in dense list pages. */
+body.v2 .spark,
+body.v2 svg.spark {
+  display: none !important;
+}
+/* If a sparkline ever needs to appear (e.g. a hero stat), use the .v2-keep-spark
+   wrapper to opt back in. */
+body.v2 .v2-keep-spark .spark,
+body.v2 .v2-keep-spark svg.spark {
+  display: block !important;
+  opacity: 0.7;
+}
+body.v2 .v2-keep-spark .spark path,
+body.v2 .v2-keep-spark .spark polyline,
+body.v2 .v2-keep-spark .spark line {
+  stroke: var(--v2-mist) !important;
+  fill: none !important;
+}
+
+/* Mastery / progress bars: re-introduced as a calm hairline track. The
+   inline `height: 8` from the component is overridden so it reads as a
+   subtle progress indicator, not a bold horizontal stripe. */
+body.v2 .bar {
+  background: var(--v2-hairline) !important;
+  height: 4px !important;
+  border-radius: 999px;
+  overflow: hidden;
+}
+body.v2 .bar > span {
+  background: var(--v2-mist) !important;
+  opacity: 0.55;
+  border-radius: 999px;
+  height: 100%;
+  display: block;
+}
+
+/* Drop dashed dividers in v2 — favour single quiet hairlines. */
+body.v2 .divider,
+body.v2 hr {
+  background: var(--v2-hairline);
+  border: 0;
+  height: 1px;
+}
+body.v2 [style*="dashed"]:not(.review-page--split *) {
+  /* defensive: kill inline dashed borders inside v2 surfaces */
+  border-style: solid !important;
+  border-color: var(--v2-hairline) !important;
+}
+
+/* ── Final sweep: tame remaining v1 visual loud-spots ───────────────── */
+
+/* Inline danger backgrounds on counter pills (e.g. "Alerts 4" badge in
+   the LeaderToday topbar). Mute to a calm Mist pill. */
+body.v2 [style*="background: var(--danger)"],
+body.v2 [style*="background:var(--danger)"] {
+  background: var(--v2-pith) !important;
+  color: var(--v2-mist) !important;
+}
+
+/* AI panel — v1 uses ink + cream; under v2 we use the same Moss-tinted
+   glass treatment as the v2 dashboard's AI brief sidecar. */
+body.v2 .ai-panel {
+  background: linear-gradient(180deg, rgba(63,92,68,0.92), rgba(53,80,56,0.92)) !important;
+  color: var(--v2-moss-ink) !important;
+  border: 1px solid rgba(255,255,255,0.10) !important;
+  border-radius: var(--v2-r-xl) !important;
+  -webkit-backdrop-filter: var(--v2-blur);
+  backdrop-filter: var(--v2-blur);
+}
+body.v2 .ai-panel * { color: inherit; }
+body.v2 .ai-panel .ai-badge {
+  background: rgba(255,255,255,0.12) !important;
+  color: var(--v2-moss-ink) !important;
+  border-color: transparent !important;
+}
+
+/* Topbar h1 → Nunito 900 to match v2 greeting feel. */
+body.v2 .topbar h1 {
+  font-family: var(--v2-display);
+  font-weight: 900;
+  font-size: clamp(28px, 3.6vw, 38px);
+  letter-spacing: -0.025em;
+  line-height: 1.04;
+}
+body.v2 .topbar .sub {
+  color: var(--v2-mist);
+  font-size: 13.5px;
+}
+
+/* Stat numbers throughout v1 screens — match v2 specimen weight. */
+body.v2 .stat-number {
+  font-family: var(--v2-display);
+  font-weight: 900;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Mute mood chips on observations (e.g. "engaged", "withdrawn") so
+   they're informative without competing with text. */
+body.v2 .chip.tone {
+  background: var(--v2-pith);
+  color: var(--v2-mist);
+  border-color: transparent;
+  font-weight: 500;
+}
+
+/* Cards inside v1 layouts: lift to glass + watercolor feel (the v2 base
+   targets .v2-card; this hits the v1 .card in retoned layouts). */
+body.v2 .card {
+  background: var(--v2-vellum) !important;
+  -webkit-backdrop-filter: var(--v2-blur);
+  backdrop-filter: var(--v2-blur);
+  border: 1px solid var(--v2-glass-edge) !important;
+  border-radius: var(--v2-r-xl) !important;
+  box-shadow: var(--v2-shadow);
+}
+
+/* The .row.between in cards is sometimes a section header; let it breathe. */
+body.v2 .card > .row.between { padding-left: 0 !important; padding-right: 0 !important; }
+
+/* Buttons inside v1 layouts — soft pills, Moss primary. */
+body.v2 .btn {
+  font-family: var(--v2-body) !important;
+  border-radius: var(--v2-r-pill) !important;
+  border: 1px solid var(--v2-glass-edge);
+}
+body.v2 .btn.primary {
+  background: linear-gradient(180deg, #4D6B52 0%, var(--v2-moss) 100%) !important;
+  color: var(--v2-moss-ink) !important;
+  border-color: transparent !important;
+  box-shadow: 0 1px 0 rgba(255,255,255,0.25) inset, 0 6px 18px -8px rgba(63,92,68,0.55);
+}
+body.v2 .btn.ghost {
+  border-color: transparent;
+  color: var(--v2-mist);
+}
+
+/* Chip default — soft glass pill */
+body.v2 .chip {
+  background: var(--v2-vellum);
+  border: 1px solid var(--v2-hairline);
+  border-radius: var(--v2-r-pill) !important;
+  font-family: var(--v2-body);
+}
+
+/* tiny labels (eyebrows) — mono mist */
+body.v2 .tiny {
+  font-family: var(--v2-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--v2-pencil);
+}
+body.v2 .muted { color: var(--v2-mist); }
