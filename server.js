@@ -258,6 +258,272 @@ app.delete('/api/review/requests/:id', (req, res) => {
   res.status(204).end();
 });
 
+// ── Onboarding ───────────────────────────────────────────────────────────────
+// Surface for the onboarding journey (intake form, owner queue, assessments,
+// observations). Tables are defined in the migration block at the top of this
+// file (Stories B1–B4). Email send + media upload land in later epics.
+
+const PROSPECT_STATUSES   = new Set(['prospect','booked','assessed','enrolled','declined']);
+const ASSESSMENT_STATUSES = new Set(['scheduled','in_progress','done']);
+const OBSERVATION_KINDS   = new Set(['image','video','voice','text']);
+
+const isEmail = (s) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trim(s));
+const toBoolInt = (v) => {
+  if (v === true || v === 1) return 1;
+  if (typeof v === 'string' && /^(yes|true|1)$/i.test(v.trim())) return 1;
+  return 0;
+};
+const cleanProspectStatus   = (v) => (PROSPECT_STATUSES.has(trim(v))   ? trim(v) : null);
+const cleanAssessmentStatus = (v) => (ASSESSMENT_STATUSES.has(trim(v)) ? trim(v) : null);
+const cleanObservationKind  = (v) => (OBSERVATION_KINDS.has(trim(v))   ? trim(v) : null);
+
+const serialiseProspect = (row) => row && ({
+  ...row,
+  flagged_needs: !!row.flagged_needs,
+  consent_notes: !!row.consent_notes,
+  consent_media: !!row.consent_media,
+});
+
+const getProspect    = (id) => serialiseProspect(db.prepare('SELECT * FROM prospects WHERE id = ?').get(id));
+const getAssessment  = (id) => db.prepare('SELECT * FROM assessments WHERE id = ?').get(id);
+
+// ── /api/intake ─────────────────────────────────────────────────────────────
+// Atomic create: one prospect row + one intake_responses row.
+app.post('/api/intake', (req, res) => {
+  const { parent_email, parent_name, parent_phone, prospect = {}, answers } = req.body ?? {};
+  if (!isEmail(parent_email)) return res.status(400).json({ error: 'parent_email is required and must look like an email' });
+  if (!answers || typeof answers !== 'object' || Array.isArray(answers)) {
+    return res.status(400).json({ error: 'answers must be an object' });
+  }
+
+  const insert = db.transaction(() => {
+    const info = db.prepare(`
+      INSERT INTO prospects (
+        parent_email, parent_name, parent_phone,
+        child_first_name, child_dob, year_group, homework_in_plan,
+        tech_comfort_parent, tech_comfort_child,
+        flagged_needs, consent_notes, consent_media
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      trim(parent_email).toLowerCase(),
+      optional(parent_name),
+      optional(parent_phone),
+      optional(prospect.child_first_name),
+      optional(prospect.child_dob),
+      optional(prospect.year_group),
+      optional(prospect.homework_in_plan),
+      optional(prospect.tech_comfort_parent),
+      optional(prospect.tech_comfort_child),
+      toBoolInt(prospect.flagged_needs),
+      toBoolInt(prospect.consent_notes),
+      toBoolInt(prospect.consent_media),
+    );
+    db.prepare('INSERT INTO intake_responses (prospect_id, answers) VALUES (?, ?)')
+      .run(info.lastInsertRowid, JSON.stringify(answers));
+    return info.lastInsertRowid;
+  });
+
+  try {
+    const id = insert();
+    res.status(201).json(getProspect(id));
+  } catch (err) {
+    console.error('POST /api/intake failed:', err);
+    res.status(500).json({ error: 'failed to save intake' });
+  }
+});
+
+// ── /api/prospects ──────────────────────────────────────────────────────────
+app.get('/api/prospects', (req, res) => {
+  const status = cleanProspectStatus(req.query.status);
+  const rows = status
+    ? db.prepare('SELECT * FROM prospects WHERE status = ? ORDER BY created_at DESC').all(status)
+    : db.prepare('SELECT * FROM prospects ORDER BY created_at DESC').all();
+  res.json(rows.map(serialiseProspect));
+});
+
+app.get('/api/prospects/:id', (req, res) => {
+  const id = idParam(req, res); if (!id) return;
+  const prospect = getProspect(id);
+  if (!prospect) return res.status(404).json({ error: 'not found' });
+  const intakeRow = db.prepare('SELECT answers, submitted_at FROM intake_responses WHERE prospect_id = ?').get(id);
+  const intake = intakeRow ? { answers: JSON.parse(intakeRow.answers), submitted_at: intakeRow.submitted_at } : null;
+  const assessments = db.prepare('SELECT * FROM assessments WHERE prospect_id = ? ORDER BY scheduled_for, created_at').all(id);
+  const observations = db.prepare('SELECT * FROM observations WHERE prospect_id = ? ORDER BY captured_at DESC').all(id);
+  res.json({ ...prospect, intake, assessments, observations });
+});
+
+app.patch('/api/prospects/:id', (req, res) => {
+  const id = idParam(req, res); if (!id) return;
+  const existing = getProspect(id);
+  if (!existing) return res.status(404).json({ error: 'not found' });
+  const b = req.body ?? {};
+
+  const status = b.status === undefined ? existing.status : cleanProspectStatus(b.status);
+  if (b.status !== undefined && !status) return res.status(400).json({ error: 'invalid status' });
+
+  db.prepare(`
+    UPDATE prospects SET
+      parent_email        = ?,
+      parent_name         = ?,
+      parent_phone        = ?,
+      child_first_name    = ?,
+      child_dob           = ?,
+      year_group          = ?,
+      homework_in_plan    = ?,
+      tech_comfort_parent = ?,
+      tech_comfort_child  = ?,
+      flagged_needs       = ?,
+      consent_notes       = ?,
+      consent_media       = ?,
+      status              = ?,
+      updated_at          = datetime('now')
+    WHERE id = ?
+  `).run(
+    b.parent_email !== undefined ? trim(b.parent_email).toLowerCase() : existing.parent_email,
+    b.parent_name !== undefined ? optional(b.parent_name) : existing.parent_name,
+    b.parent_phone !== undefined ? optional(b.parent_phone) : existing.parent_phone,
+    b.child_first_name !== undefined ? optional(b.child_first_name) : existing.child_first_name,
+    b.child_dob !== undefined ? optional(b.child_dob) : existing.child_dob,
+    b.year_group !== undefined ? optional(b.year_group) : existing.year_group,
+    b.homework_in_plan !== undefined ? optional(b.homework_in_plan) : existing.homework_in_plan,
+    b.tech_comfort_parent !== undefined ? optional(b.tech_comfort_parent) : existing.tech_comfort_parent,
+    b.tech_comfort_child !== undefined ? optional(b.tech_comfort_child) : existing.tech_comfort_child,
+    b.flagged_needs !== undefined ? toBoolInt(b.flagged_needs) : (existing.flagged_needs ? 1 : 0),
+    b.consent_notes !== undefined ? toBoolInt(b.consent_notes) : (existing.consent_notes ? 1 : 0),
+    b.consent_media !== undefined ? toBoolInt(b.consent_media) : (existing.consent_media ? 1 : 0),
+    status,
+    id,
+  );
+  res.json(getProspect(id));
+});
+
+// ── /api/assessments ────────────────────────────────────────────────────────
+app.post('/api/assessments', (req, res) => {
+  const { prospect_id, scheduled_for, teacher_id } = req.body ?? {};
+  const pid = Number(prospect_id);
+  if (!Number.isInteger(pid) || pid <= 0) return res.status(400).json({ error: 'prospect_id is required' });
+  if (!getProspect(pid)) return res.status(404).json({ error: 'prospect not found' });
+
+  const info = db.prepare(
+    'INSERT INTO assessments (prospect_id, scheduled_for, teacher_id) VALUES (?, ?, ?)'
+  ).run(pid, optional(scheduled_for), optional(teacher_id));
+
+  // Mark the prospect as booked when its first assessment is scheduled.
+  if (scheduled_for) {
+    db.prepare("UPDATE prospects SET status = 'booked', updated_at = datetime('now') WHERE id = ? AND status = 'prospect'").run(pid);
+  }
+  res.status(201).json(getAssessment(info.lastInsertRowid));
+});
+
+app.get('/api/assessments/:id', (req, res) => {
+  const id = idParam(req, res); if (!id) return;
+  const row = getAssessment(id);
+  if (!row) return res.status(404).json({ error: 'not found' });
+  res.json(row);
+});
+
+app.patch('/api/assessments/:id', (req, res) => {
+  const id = idParam(req, res); if (!id) return;
+  const existing = getAssessment(id);
+  if (!existing) return res.status(404).json({ error: 'not found' });
+  const b = req.body ?? {};
+
+  const status = b.status === undefined ? existing.status : cleanAssessmentStatus(b.status);
+  if (b.status !== undefined && !status) return res.status(400).json({ error: 'invalid status' });
+
+  db.prepare(`
+    UPDATE assessments SET
+      scheduled_for = ?,
+      teacher_id    = ?,
+      status        = ?,
+      report_draft  = ?,
+      updated_at    = datetime('now')
+    WHERE id = ?
+  `).run(
+    b.scheduled_for !== undefined ? optional(b.scheduled_for) : existing.scheduled_for,
+    b.teacher_id !== undefined ? optional(b.teacher_id) : existing.teacher_id,
+    status,
+    b.report_draft !== undefined ? optional(b.report_draft) : existing.report_draft,
+    id,
+  );
+  res.json(getAssessment(id));
+});
+
+app.post('/api/assessments/:id/sign-off', (req, res) => {
+  const id = idParam(req, res); if (!id) return;
+  const existing = getAssessment(id);
+  if (!existing) return res.status(404).json({ error: 'not found' });
+  if (!trim(existing.report_draft)) return res.status(400).json({ error: 'report_draft is empty' });
+  if (existing.report_signed_off_at) return res.status(409).json({ error: 'already signed off' });
+
+  db.prepare(`
+    UPDATE assessments SET
+      status = 'done',
+      report_signed_off_at = datetime('now'),
+      updated_at = datetime('now')
+    WHERE id = ?
+  `).run(id);
+  res.json(getAssessment(id));
+});
+
+app.post('/api/assessments/:id/send', (req, res) => {
+  const id = idParam(req, res); if (!id) return;
+  const existing = getAssessment(id);
+  if (!existing) return res.status(404).json({ error: 'not found' });
+  if (!existing.report_signed_off_at) return res.status(409).json({ error: 'sign off the report before sending' });
+  if (existing.sent_to_parent_at) return res.status(409).json({ error: 'already sent' });
+
+  // NOTE: actual email send happens in F5 (Sign-off + send). For now we just
+  // persist the timestamp and bump the prospect's status to 'assessed'.
+  const sendTx = db.transaction(() => {
+    db.prepare("UPDATE assessments SET sent_to_parent_at = datetime('now'), updated_at = datetime('now') WHERE id = ?").run(id);
+    db.prepare("UPDATE prospects SET status = 'assessed', updated_at = datetime('now') WHERE id = ?").run(existing.prospect_id);
+  });
+  sendTx();
+  res.json(getAssessment(id));
+});
+
+// ── /api/observations ───────────────────────────────────────────────────────
+app.get('/api/observations', (req, res) => {
+  const pid = req.query.prospect_id ? Number(req.query.prospect_id) : null;
+  if (pid !== null && (!Number.isInteger(pid) || pid <= 0)) {
+    return res.status(400).json({ error: 'prospect_id must be a positive integer' });
+  }
+  const rows = pid
+    ? db.prepare('SELECT * FROM observations WHERE prospect_id = ? ORDER BY captured_at DESC').all(pid)
+    : db.prepare('SELECT * FROM observations ORDER BY captured_at DESC LIMIT 100').all();
+  res.json(rows);
+});
+
+app.post('/api/observations', (req, res) => {
+  const { prospect_id, child_id, teacher_id, kind, media_url, transcript, comment } = req.body ?? {};
+  const k = cleanObservationKind(kind);
+  if (!k) return res.status(400).json({ error: `kind must be one of: ${[...OBSERVATION_KINDS].join(', ')}` });
+  if (!trim(media_url) && !trim(transcript) && !trim(comment)) {
+    return res.status(400).json({ error: 'observation must have at least one of media_url, transcript, or comment' });
+  }
+
+  let pid = null;
+  if (prospect_id !== undefined && prospect_id !== null && prospect_id !== '') {
+    const n = Number(prospect_id);
+    if (!Number.isInteger(n) || n <= 0) return res.status(400).json({ error: 'prospect_id must be a positive integer' });
+    if (!getProspect(n)) return res.status(404).json({ error: 'prospect not found' });
+    pid = n;
+  }
+
+  const info = db.prepare(`
+    INSERT INTO observations (prospect_id, child_id, teacher_id, kind, media_url, transcript, comment)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `).run(pid, optional(child_id), optional(teacher_id), k, optional(media_url), optional(transcript), optional(comment));
+  res.status(201).json(db.prepare('SELECT * FROM observations WHERE id = ?').get(info.lastInsertRowid));
+});
+
+app.delete('/api/observations/:id', (req, res) => {
+  const id = idParam(req, res); if (!id) return;
+  db.prepare('DELETE FROM observations WHERE id = ?').run(id);
+  res.status(204).end();
+});
+
 app.get('/api/health', (_req, res) => res.json({ ok: true }));
 
 // ── Static SPA ───────────────────────────────────────────────────────────────
