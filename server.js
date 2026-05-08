@@ -1,6 +1,9 @@
-// Express server: serves the built Vite SPA and exposes /api/review/* endpoints
-// backed by a small SQLite database. In Railway, set DATA_DIR=/data and mount a
-// volume there so feedback survives redeploys.
+// Express server: serves the built Vite SPA and exposes the API + SQLite store.
+// Two surfaces share the same database (DATA_DIR/review.db):
+//   - /api/review/*    — reviewer-guide feedback (existing)
+//   - /api/intake, /api/prospects/*, /api/assessments/*, /api/observations/*
+//     — onboarding journey (Epic B onwards)
+// In Railway, set DATA_DIR=/data and mount a volume there so data survives redeploys.
 import express from 'express';
 import Database from 'better-sqlite3';
 import path from 'node:path';
@@ -44,6 +47,33 @@ db.exec(`
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
+
+  -- Onboarding: one row per family that submits the public intake form.
+  -- High-signal answers from the intake are mirrored here as indexed columns
+  -- so the owner queue can filter quickly; the full answer set lives in
+  -- intake_responses.answers (JSON) — see Story B2.
+  CREATE TABLE IF NOT EXISTS prospects (
+    id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+    parent_email        TEXT NOT NULL,
+    parent_name         TEXT,
+    parent_phone        TEXT,
+    child_first_name    TEXT,
+    child_dob           TEXT,           -- ISO date YYYY-MM-DD; age is derived
+    year_group          TEXT,           -- Reception | Year 1..6
+    homework_in_plan    TEXT,           -- yes | no | maybe
+    tech_comfort_parent TEXT,           -- intake Q8
+    tech_comfort_child  TEXT,           -- intake Q9
+    flagged_needs       INTEGER NOT NULL DEFAULT 0,  -- 0/1, true if Q19 has any non-None
+    consent_notes       INTEGER NOT NULL DEFAULT 0,  -- Q22 (required to enrol)
+    consent_media       INTEGER NOT NULL DEFAULT 0,  -- Q23 (required to enrol)
+    status              TEXT NOT NULL DEFAULT 'prospect'
+                          CHECK (status IN ('prospect','booked','assessed','enrolled','declined')),
+    created_at          TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at          TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE INDEX IF NOT EXISTS idx_prospects_status      ON prospects(status);
+  CREATE INDEX IF NOT EXISTS idx_prospects_parent_mail ON prospects(parent_email);
+  CREATE INDEX IF NOT EXISTS idx_prospects_created_at  ON prospects(created_at DESC);
 `);
 
 // Idempotent migrations for databases created before priority existed.
