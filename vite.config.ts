@@ -5,8 +5,11 @@ import react from '@vitejs/plugin-react'
 export default defineConfig({
   plugins: [react()],
   server: {
+    // Forward /api/* to the Express dev server (npm run dev:server) which
+    // listens on :3000 by default. Keeps the parent intake form's POST
+    // /api/intake reachable when running Vite alongside it.
     proxy: {
-      '/api': 'http://localhost:8787',
+      '/api': 'http://localhost:3000',
     },
   },
 })
