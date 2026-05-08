@@ -12,6 +12,7 @@ import { StudentLayoutV2 } from './screens/v2/student/StudentLayoutV2';
 import { LeaderLayoutV2 } from './screens/v2/leader/LeaderLayoutV2';
 import { ReviewGuide } from './components/review/ReviewGuide';
 import { VariantSwitch } from './components/v2/VariantSwitch';
+import { IntakeFlow } from './screens/intake/IntakeFlow';
 import type { Role } from './data/types';
 
 function useV2Path() {
@@ -30,9 +31,20 @@ function useV2Path() {
   }] as const;
 }
 
+function useWelcomePath() {
+  const [isWelcome, setIsWelcome] = useState(() => window.location.pathname.startsWith('/welcome'));
+  useEffect(() => {
+    const sync = () => setIsWelcome(window.location.pathname.startsWith('/welcome'));
+    window.addEventListener('popstate', sync);
+    return () => window.removeEventListener('popstate', sync);
+  }, []);
+  return isWelcome;
+}
+
 function App() {
   const { authed, role, variant, login } = useAppStore();
   const [isV2, setIsV2] = useV2Path();
+  const isWelcome = useWelcomePath();
 
   // Apply variant class to body (v1 calm/playful)
   useEffect(() => {
@@ -40,10 +52,10 @@ function App() {
     document.body.classList.add(`variant-${variant}`);
   }, [variant]);
 
-  // Apply v2 class to body — scopes all v2 styles
+  // Apply v2 class to body — scopes all v2 styles. The intake form is v2-only.
   useEffect(() => {
-    document.body.classList.toggle('v2', isV2);
-  }, [isV2]);
+    document.body.classList.toggle('v2', isV2 || isWelcome);
+  }, [isV2, isWelcome]);
 
   const handleLogin = (r: Role, opts?: { childId?: string }) => {
     login(r, opts);
@@ -68,6 +80,11 @@ function App() {
       default: return <TeacherLayoutV2/>;
     }
   };
+
+  // Public, parent-facing intake flow — no auth, no chrome.
+  if (isWelcome) {
+    return <IntakeFlow/>;
+  }
 
   return (
     <>

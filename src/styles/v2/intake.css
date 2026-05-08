@@ -1,0 +1,461 @@
+/* Acorns v2 "Watercolor Glass" — public intake form (Stories A2–A5).
+   All selectors are scoped under body.v2 so this file never touches v1.
+   The body.v2 class is forced on by App.tsx whenever the path matches
+   /welcome, so the parent always sees v2 here regardless of the variant
+   pill state.
+
+   Layout idea: a single full-viewport stage with a slim header that holds
+   the brand mark + progress bar. Each step renders a centred glass card
+   on the watercolor canvas. One question per screen, one decision at a
+   time, plenty of breathing room.
+*/
+
+body.v2 .intake-shell {
+  position: relative;
+  z-index: 1;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── Header (brand + progress) ──────────────────────────────────────────── */
+body.v2 .intake-header {
+  display: flex;
+  align-items: center;
+  gap: clamp(16px, 3vw, 32px);
+  padding: clamp(14px, 2.4vw, 22px) clamp(20px, 4vw, 44px);
+  border-bottom: 1px solid var(--v2-hairline);
+  background: var(--v2-vellum);
+  backdrop-filter: var(--v2-blur);
+  -webkit-backdrop-filter: var(--v2-blur);
+}
+body.v2 .intake-brand {
+  font-family: var(--v2-display, 'Nunito', sans-serif);
+  font-weight: 800;
+  font-size: 15px;
+  letter-spacing: -0.01em;
+  color: var(--v2-ink);
+  white-space: nowrap;
+}
+body.v2 .intake-progress {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+body.v2 .intake-progress-bar {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--v2-pith);
+  overflow: hidden;
+  position: relative;
+}
+body.v2 .intake-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--v2-moss), var(--v2-moss-2));
+  border-radius: 999px;
+  transition: width 360ms var(--v2-spring);
+}
+body.v2 .intake-progress-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--v2-mist);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+body.v2 .intake-progress-section { color: var(--v2-moss); }
+body.v2 .intake-progress-dot { opacity: 0.45; }
+body.v2 .intake-progress-title { color: var(--v2-mist); font-weight: 500; }
+
+/* ── Main stage ─────────────────────────────────────────────────────────── */
+body.v2 .intake-main {
+  flex: 1;
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
+  padding: clamp(24px, 5vw, 64px) clamp(20px, 4vw, 56px);
+}
+body.v2 .intake-stage {
+  width: 100%;
+  max-width: 720px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  padding-top: clamp(12px, 4vh, 48px);
+}
+body.v2 .intake-stage--center {
+  justify-content: center;
+  padding-top: 0;
+}
+
+/* ── Card (the glass surface) ───────────────────────────────────────────── */
+body.v2 .intake-card {
+  background: var(--v2-vellum-strong);
+  border: 1px solid var(--v2-hairline);
+  border-radius: var(--v2-r-xl);
+  box-shadow: var(--v2-shadow);
+  backdrop-filter: var(--v2-blur);
+  -webkit-backdrop-filter: var(--v2-blur);
+  padding: clamp(28px, 4.5vw, 48px);
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+body.v2 .intake-card--lift { box-shadow: var(--v2-shadow-lift); }
+body.v2 .intake-card--wide { max-width: none; }
+body.v2 .intake-card--emphasis {
+  border-color: var(--v2-moss-ring);
+  box-shadow:
+    var(--v2-shadow-lift),
+    0 0 0 4px var(--v2-moss-soft);
+}
+
+/* ── Type ───────────────────────────────────────────────────────────────── */
+body.v2 .intake-eyebrow {
+  margin: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--v2-moss);
+}
+body.v2 .intake-headline {
+  margin: 0;
+  font-family: var(--v2-display, 'Nunito', sans-serif);
+  font-weight: 900;
+  font-size: clamp(30px, 4.6vw, 56px);
+  line-height: 1.05;
+  letter-spacing: -0.022em;
+  color: var(--v2-ink);
+}
+body.v2 .intake-headline em {
+  font-style: normal;
+  color: var(--v2-moss);
+  position: relative;
+  display: inline-block;
+}
+body.v2 .intake-headline em::after {
+  content: '';
+  position: absolute;
+  left: 0; right: 0; bottom: 0.06em;
+  height: 0.18em;
+  background: var(--v2-moss-soft);
+  border-radius: 999px;
+  z-index: -1;
+}
+body.v2 .intake-question {
+  margin: 0;
+  font-family: var(--v2-display, 'Nunito', sans-serif);
+  font-weight: 800;
+  font-size: clamp(22px, 3.4vw, 34px);
+  line-height: 1.18;
+  letter-spacing: -0.012em;
+  color: var(--v2-ink);
+}
+body.v2 .intake-required { color: var(--v2-terra); font-weight: 700; }
+body.v2 .intake-helper {
+  margin: 0;
+  color: var(--v2-mist);
+  font-size: 15px;
+  line-height: 1.55;
+}
+body.v2 .intake-lede {
+  margin: 0;
+  color: var(--v2-mist);
+  font-size: clamp(15px, 1.6vw, 18px);
+  line-height: 1.6;
+}
+body.v2 .intake-fineprint {
+  margin: 0;
+  color: var(--v2-pencil);
+  font-size: 13px;
+  line-height: 1.55;
+}
+body.v2 .intake-error {
+  margin: 0;
+  color: var(--v2-terra);
+  font-size: 14px;
+  font-weight: 600;
+}
+body.v2 .intake-error--block {
+  padding: 12px 14px;
+  background: var(--v2-terra-soft);
+  border-radius: var(--v2-r-md);
+}
+
+/* ── Inputs ─────────────────────────────────────────────────────────────── */
+body.v2 .intake-field-wrap { margin-top: 4px; }
+body.v2 .intake-label {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--v2-ink);
+}
+body.v2 .intake-label-hint {
+  font-style: normal;
+  font-weight: 500;
+  color: var(--v2-pencil);
+}
+body.v2 .intake-input,
+body.v2 .intake-textarea,
+body.v2 .intake-select {
+  width: 100%;
+  padding: 14px 16px;
+  background: var(--v2-vellum-solid);
+  border: 1px solid var(--v2-hairline-2);
+  border-radius: var(--v2-r-md);
+  color: var(--v2-ink);
+  font-family: inherit;
+  font-size: 17px;
+  line-height: 1.4;
+  transition: border-color var(--v2-dur-fast) var(--v2-ease),
+              box-shadow var(--v2-dur-fast) var(--v2-ease);
+}
+body.v2 .intake-input:focus,
+body.v2 .intake-textarea:focus,
+body.v2 .intake-select:focus {
+  outline: none;
+  border-color: var(--v2-moss);
+  box-shadow: 0 0 0 4px var(--v2-moss-soft);
+}
+body.v2 .intake-input-date { font-variant-numeric: tabular-nums; }
+body.v2 .intake-textarea {
+  resize: vertical;
+  min-height: 120px;
+}
+body.v2 .intake-input-other { margin-top: 4px; }
+
+/* ── Options (radio / multi pills) ──────────────────────────────────────── */
+body.v2 .intake-options {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+body.v2 .intake-options-hint {
+  margin: 0 0 4px;
+  font-size: 13px;
+  color: var(--v2-pencil);
+  font-weight: 500;
+}
+body.v2 .intake-option {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  padding: 14px 16px;
+  background: var(--v2-vellum-solid);
+  border: 1px solid var(--v2-hairline-2);
+  border-radius: var(--v2-r-md);
+  text-align: left;
+  font-family: inherit;
+  font-size: 16px;
+  font-weight: 500;
+  color: var(--v2-ink);
+  cursor: pointer;
+  transition: border-color var(--v2-dur-fast) var(--v2-ease),
+              background var(--v2-dur-fast) var(--v2-ease),
+              box-shadow var(--v2-dur-fast) var(--v2-ease);
+}
+body.v2 .intake-option:hover:not(.is-disabled) {
+  border-color: var(--v2-moss-ring);
+}
+body.v2 .intake-option.is-selected {
+  border-color: var(--v2-moss);
+  background: var(--v2-moss-soft);
+  box-shadow: 0 0 0 4px var(--v2-moss-soft);
+}
+body.v2 .intake-option.is-disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+body.v2 .intake-option-bullet {
+  flex: 0 0 auto;
+  width: 20px; height: 20px;
+  border-radius: 999px;
+  border: 2px solid var(--v2-stone);
+  background: var(--v2-vellum-solid);
+  position: relative;
+  transition: border-color var(--v2-dur-fast) var(--v2-ease),
+              background var(--v2-dur-fast) var(--v2-ease);
+}
+body.v2 .intake-option-bullet--check { border-radius: 6px; }
+body.v2 .intake-option.is-selected .intake-option-bullet {
+  border-color: var(--v2-moss);
+  background: var(--v2-moss);
+}
+body.v2 .intake-option.is-selected .intake-option-bullet::after {
+  content: '';
+  position: absolute;
+  inset: 4px;
+  background: var(--v2-vellum-solid);
+  border-radius: inherit;
+  transform: scale(0.6);
+}
+body.v2 .intake-option.is-selected .intake-option-bullet--check::after {
+  inset: 2px;
+  background: transparent;
+  border-right: 2.5px solid var(--v2-vellum-solid);
+  border-bottom: 2.5px solid var(--v2-vellum-solid);
+  transform: rotate(45deg) scale(0.55);
+  transform-origin: 60% 60%;
+  border-radius: 0;
+}
+body.v2 .intake-option-label { flex: 1; }
+
+/* ── Buttons + actions ──────────────────────────────────────────────────── */
+body.v2 .intake-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 8px;
+}
+body.v2 .intake-actions--row {
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+}
+body.v2 .intake-btn {
+  padding: 14px 22px;
+  border-radius: var(--v2-r-pill);
+  font-family: inherit;
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: -0.005em;
+  cursor: pointer;
+  transition: transform var(--v2-dur-fast) var(--v2-ease),
+              background var(--v2-dur-fast) var(--v2-ease),
+              box-shadow var(--v2-dur-fast) var(--v2-ease);
+  white-space: nowrap;
+}
+body.v2 .intake-btn:disabled { opacity: 0.55; cursor: not-allowed; }
+body.v2 .intake-btn--primary {
+  background: var(--v2-moss);
+  color: var(--v2-moss-ink);
+  border: 1px solid var(--v2-moss-2);
+  box-shadow: var(--v2-shadow);
+}
+body.v2 .intake-btn--primary:hover:not(:disabled) {
+  background: var(--v2-moss-2);
+  transform: translateY(-1px);
+  box-shadow: var(--v2-shadow-lift);
+}
+body.v2 .intake-btn--ghost {
+  background: transparent;
+  color: var(--v2-mist);
+  border: 1px solid var(--v2-hairline-2);
+}
+body.v2 .intake-btn--ghost:hover:not(:disabled) {
+  color: var(--v2-ink);
+  border-color: var(--v2-stone);
+}
+body.v2 .intake-btn--text {
+  background: transparent;
+  color: var(--v2-moss);
+  border: none;
+  padding: 6px 10px;
+  font-size: 14px;
+  font-weight: 600;
+}
+body.v2 .intake-btn--text:hover:not(:disabled) { text-decoration: underline; }
+
+/* ── Review screen ──────────────────────────────────────────────────────── */
+body.v2 .intake-review-section {
+  border-top: 1px solid var(--v2-hairline);
+  padding-top: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+body.v2 .intake-review-section:first-of-type { border-top: 0; padding-top: 6px; }
+body.v2 .intake-review-section-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+body.v2 .intake-review-section-head h3 {
+  margin: 0;
+  font-family: var(--v2-display, 'Nunito', sans-serif);
+  font-weight: 800;
+  font-size: 18px;
+  letter-spacing: -0.005em;
+  color: var(--v2-ink);
+}
+body.v2 .intake-review-list {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+body.v2 .intake-review-row {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 4px;
+  padding: 10px 0;
+  border-bottom: 1px dashed var(--v2-hairline);
+}
+body.v2 .intake-review-row:last-child { border-bottom: 0; }
+body.v2 .intake-review-row dt {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--v2-mist);
+  letter-spacing: 0.005em;
+}
+body.v2 .intake-review-row dd {
+  margin: 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--v2-ink);
+  font-size: 16px;
+  line-height: 1.5;
+}
+body.v2 .intake-review-answer { flex: 1; }
+body.v2 .intake-review-edit { flex: 0 0 auto; }
+
+@media (min-width: 720px) {
+  body.v2 .intake-review-row {
+    grid-template-columns: 200px 1fr;
+    align-items: baseline;
+  }
+}
+
+/* ── Thank-you "what happens next" ──────────────────────────────────────── */
+body.v2 .intake-next {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 18px 22px;
+  background: var(--v2-vellum);
+  border: 1px solid var(--v2-hairline);
+  border-radius: var(--v2-r-lg);
+}
+body.v2 .intake-next h3 {
+  margin: 0;
+  font-family: var(--v2-display, 'Nunito', sans-serif);
+  font-weight: 800;
+  font-size: 16px;
+  letter-spacing: 0.005em;
+  color: var(--v2-moss);
+  text-transform: uppercase;
+}
+body.v2 .intake-next-list {
+  margin: 0;
+  padding-left: 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  color: var(--v2-ink);
+  font-size: 15px;
+  line-height: 1.55;
+}
+body.v2 .intake-next-list li::marker { color: var(--v2-moss); font-weight: 800; }
+body.v2 .intake-next-list strong { color: var(--v2-moss); font-weight: 700; }
