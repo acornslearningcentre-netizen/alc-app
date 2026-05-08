@@ -17,6 +17,7 @@ const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
 fs.mkdirSync(DATA_DIR, { recursive: true });
 const db = new Database(path.join(DATA_DIR, 'review.db'));
 db.pragma('journal_mode = WAL');
+db.pragma('foreign_keys = ON');
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS area_feedback (
@@ -74,6 +75,18 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_prospects_status      ON prospects(status);
   CREATE INDEX IF NOT EXISTS idx_prospects_parent_mail ON prospects(parent_email);
   CREATE INDEX IF NOT EXISTS idx_prospects_created_at  ON prospects(created_at DESC);
+
+  -- Onboarding: full intake answer set, one row per prospect.
+  -- The high-signal answers are mirrored on prospects (B1) for fast filtering;
+  -- everything else (goals, focus aids, hobbies Q17, etc.) lives here as JSON
+  -- so the report-draft prompt (F2) can read the whole picture.
+  CREATE TABLE IF NOT EXISTS intake_responses (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    prospect_id   INTEGER NOT NULL UNIQUE
+                    REFERENCES prospects(id) ON DELETE CASCADE,
+    answers       TEXT    NOT NULL,         -- JSON: { [questionId]: value }
+    submitted_at  TEXT    NOT NULL DEFAULT (datetime('now'))
+  );
 `);
 
 // Idempotent migrations for databases created before priority existed.
