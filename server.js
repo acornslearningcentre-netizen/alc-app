@@ -109,6 +109,27 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_assessments_prospect    ON assessments(prospect_id);
   CREATE INDEX IF NOT EXISTS idx_assessments_status      ON assessments(status);
   CREATE INDEX IF NOT EXISTS idx_assessments_scheduled   ON assessments(scheduled_for);
+
+  -- Onboarding: in-the-moment observations captured by a teacher during
+  -- (or outside of) an assessment. prospect_id and child_id are both
+  -- nullable so an observation can belong to a prospect (pre-enrolment),
+  -- a child (post-enrolment), or be a free-floating teacher note.
+  CREATE TABLE IF NOT EXISTS observations (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    prospect_id   INTEGER REFERENCES prospects(id) ON DELETE CASCADE,
+    child_id      TEXT,                              -- opaque ref; no children table yet
+    teacher_id    TEXT,
+    kind          TEXT NOT NULL
+                    CHECK (kind IN ('image','video','voice','text')),
+    media_url     TEXT,                              -- relative path under data/media/ for now (B6)
+    transcript    TEXT,                              -- for voice → text (E3)
+    comment       TEXT,                              -- teacher's typed note
+    captured_at   TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE INDEX IF NOT EXISTS idx_observations_prospect ON observations(prospect_id);
+  CREATE INDEX IF NOT EXISTS idx_observations_child    ON observations(child_id);
+  CREATE INDEX IF NOT EXISTS idx_observations_kind     ON observations(kind);
+  CREATE INDEX IF NOT EXISTS idx_observations_captured ON observations(captured_at DESC);
 `);
 
 // Idempotent migrations for databases created before priority existed.
