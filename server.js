@@ -87,6 +87,28 @@ db.exec(`
     answers       TEXT    NOT NULL,         -- JSON: { [questionId]: value }
     submitted_at  TEXT    NOT NULL DEFAULT (datetime('now'))
   );
+
+  -- Onboarding: the 2-hour assessment session a prospect books, plus the
+  -- AI-drafted report that gets signed off and emailed to the parent.
+  -- Multiple rows per prospect are allowed (re-assessment within the
+  -- 4-week reassessment window — see project CLAUDE.md "working agreements").
+  CREATE TABLE IF NOT EXISTS assessments (
+    id                    INTEGER PRIMARY KEY AUTOINCREMENT,
+    prospect_id           INTEGER NOT NULL
+                            REFERENCES prospects(id) ON DELETE CASCADE,
+    scheduled_for         TEXT,                 -- ISO datetime
+    teacher_id            TEXT,                 -- loose for now (no teachers table yet)
+    status                TEXT NOT NULL DEFAULT 'scheduled'
+                            CHECK (status IN ('scheduled','in_progress','done')),
+    report_draft          TEXT,                 -- HTML/Markdown body, populated by F2
+    report_signed_off_at  TEXT,
+    sent_to_parent_at     TEXT,
+    created_at            TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at            TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE INDEX IF NOT EXISTS idx_assessments_prospect    ON assessments(prospect_id);
+  CREATE INDEX IF NOT EXISTS idx_assessments_status      ON assessments(status);
+  CREATE INDEX IF NOT EXISTS idx_assessments_scheduled   ON assessments(scheduled_for);
 `);
 
 // Idempotent migrations for databases created before priority existed.
