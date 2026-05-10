@@ -59,10 +59,20 @@ function recapLabel(field: IntakeField | null): string | undefined {
   return lower.length > 60 ? lower.slice(0, 60).trim() + '…' : lower;
 }
 
+/** Frozen snapshot rendered on the thank-you screen. We capture this at submit
+ *  time and clear the live draft so the next visit starts fresh — the screen
+ *  the parent is on right now still reads from the snapshot. */
+interface ThanksSnapshot {
+  parentName?: string;
+  childFirstName?: string;
+  hobbiesSnippet?: string;
+}
+
 export const IntakeFlow = () => {
   const [draft, setDraft] = useState<IntakeDraft>(() => loadDraft());
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [thanksSnapshot, setThanksSnapshot] = useState<ThanksSnapshot | null>(null);
   const isFirstRender = useRef(true);
 
   // Persist on every change, except the very first render — no point
@@ -130,6 +140,14 @@ export const IntakeFlow = () => {
   const submit = async () => {
     setSubmitting(true);
     setSubmitError(null);
+    // Snapshot the bits the thank-you card needs BEFORE we clear the draft.
+    const cn = typeof draft.answers['child_name'] === 'string' ? draft.answers['child_name'].trim().split(/\s+/)[0] : undefined;
+    const hs = typeof draft.answers['hobbies'] === 'string' ? draft.answers['hobbies'].trim() : undefined;
+    const snapshot: ThanksSnapshot = {
+      parentName: draft.parent.name,
+      childFirstName: cn || undefined,
+      hobbiesSnippet: hs || undefined,
+    };
     try {
       const indexed = extractIndexedFields(draft.answers);
       const res = await fetch('/api/intake', {
@@ -147,8 +165,12 @@ export const IntakeFlow = () => {
         const err = await res.json().catch(() => ({}));
         throw new Error(err.error || 'Sorry, we couldn\'t save your form. Please try again in a moment.');
       }
+      // Clear localStorage AND in-memory state. The thank-you screen reads
+      // from the snapshot above, not the draft, so a refresh while sitting on
+      // thanks doesn't carry the previous family's answers into a new visit.
       clearDraft();
-      setDraft((d) => ({ ...d, step: 'thanks' }));
+      setThanksSnapshot(snapshot);
+      setDraft({ step: 'thanks', currentQuestionIdx: 0, answers: {}, parent: {} });
     } catch (e) {
       setSubmitError(e instanceof Error ? e.message : 'Network error');
     } finally {
@@ -163,12 +185,6 @@ export const IntakeFlow = () => {
   const childFirstName = useMemo(() => {
     const cn = typeof draft.answers['child_name'] === 'string' ? draft.answers['child_name'] : '';
     return cn?.trim().split(/\s+/)[0] || undefined;
-  }, [draft.answers]);
-
-  const hobbiesSnippet = useMemo(() => {
-    const v = draft.answers['hobbies'];
-    if (typeof v !== 'string') return undefined;
-    return v.trim() || undefined;
   }, [draft.answers]);
 
   const lastEditedField = useMemo<IntakeField | null>(() => {
@@ -251,9 +267,10 @@ export const IntakeFlow = () => {
 
         {draft.step === 'thanks' && (
           <ThankYouStep
-            parentName={draft.parent.name}
-            childFirstName={childFirstName}
-            hobbiesSnippet={hobbiesSnippet}
+            parentName={thanksSnapshot?.parentName}
+            childFirstName={thanksSnapshot?.childFirstName}
+            hobbiesSnippet={thanksSnapshot?.hobbiesSnippet}
+            onHome={() => { window.location.href = '/'; }}
           />
         )}
       </main>

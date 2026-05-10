@@ -853,6 +853,15 @@ body.v2 .intake-question--hero {
   font-size: clamp(28px, 4.4vw, 48px);
 }
 
+/* Thank-you screen footer — calm exit back to the homepage. */
+body.v2 .intake-thanks-foot {
+  margin-top: 22px;
+  padding-top: 18px;
+  border-top: 1px solid var(--v2-hairline);
+  display: flex;
+  justify-content: center;
+}
+
 /* Saved-draft snippet on the welcome-back card. */
 body.v2 .intake-saved-snippet {
   margin-top: 18px;

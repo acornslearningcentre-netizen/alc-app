@@ -9,12 +9,14 @@ interface Props {
   childFirstName?: string;
   /** Hobbies snippet from the answers — used to make the "Today" line feel read, not received. */
   hobbiesSnippet?: string;
+  /** Click handler for the "Back to Acorns" exit button. */
+  onHome: () => void;
 }
 
 const truncate = (s: string, max: number) =>
   s.length <= max ? s : s.slice(0, max).replace(/[,;:.\s]+$/, '') + '…';
 
-export const ThankYouStep = ({ parentName, childFirstName, hobbiesSnippet }: Props) => {
+export const ThankYouStep = ({ parentName, childFirstName, hobbiesSnippet, onHome }: Props) => {
   const parentFirst = parentName?.split(/\s+/)[0]?.trim();
   const child = childFirstName?.trim() || 'your child';
   const greet = parentFirst
@@ -81,6 +83,12 @@ export const ThankYouStep = ({ parentName, childFirstName, hobbiesSnippet }: Pro
 
         <div className="intake-signature" style={{ marginTop: 22, textAlign: 'right', fontSize: 16 }}>
           &mdash; Aishat
+        </div>
+
+        <div className="intake-thanks-foot">
+          <button type="button" className="intake-btn intake-btn--ghost" onClick={onHome}>
+            <span aria-hidden="true">←</span>&nbsp;Back to Acorns
+          </button>
         </div>
       </div>
     </div>
