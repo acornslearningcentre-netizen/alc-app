@@ -14,7 +14,7 @@ body.v2 .v2-login-rule-top {
   align-items: center;
   gap: 16px;
   padding: 0 clamp(20px, 4vw, 44px);
-  margin-top: -20px;
+  margin-top: -80px;
 }
 body.v2 .v2-login-mark {
   display: inline-flex;
@@ -22,6 +22,41 @@ body.v2 .v2-login-mark {
 }
 body.v2 .v2-login-mark img { height: 36px; }
 body.v2 .v2-login-issue { margin-left: auto; opacity: 0.7; }
+
+/* "New here? Start onboarding" pill — top-right of every login step.
+   Filled moss CTA so it reads clearly as the primary path for new families;
+   matches the v2-btn.primary treatment used elsewhere. */
+body.v2 .v2-login-onboard {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 18px;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: -0.005em;
+  color: var(--v2-moss-ink);
+  background: linear-gradient(180deg, #4D6B52 0%, var(--v2-moss) 100%);
+  border: 1px solid var(--v2-moss-2);
+  border-radius: 999px;
+  text-decoration: none;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.25) inset,
+    0 8px 22px -8px rgba(63, 92, 68, 0.55);
+  transition: background var(--v2-dur-fast) var(--v2-ease),
+              transform var(--v2-dur-fast) var(--v2-ease),
+              box-shadow var(--v2-dur-fast) var(--v2-ease);
+}
+body.v2 .v2-login-onboard:hover {
+  background: linear-gradient(180deg, #466048 0%, var(--v2-moss-2) 100%);
+  transform: translateY(-1px);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.3) inset,
+    0 12px 28px -10px rgba(63, 92, 68, 0.6);
+  text-decoration: none;
+}
+body.v2 .v2-login-onboard:active { transform: translateY(0); }
+body.v2 .v2-login-onboard svg { flex-shrink: 0; }
 
 /* Main stage — two columns at desktop, headline left + glass form right */
 body.v2 .v2-login-stage {

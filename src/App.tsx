@@ -12,6 +12,8 @@ import { StudentLayoutV2 } from './screens/v2/student/StudentLayoutV2';
 import { LeaderLayoutV2 } from './screens/v2/leader/LeaderLayoutV2';
 import { ReviewGuide } from './components/review/ReviewGuide';
 import { VariantSwitch } from './components/v2/VariantSwitch';
+import { IntakeFlow } from './screens/intake/IntakeFlow';
+import { featureFlags } from './lib/feature-flags';
 import type { Role } from './data/types';
 
 function useV2Path() {
@@ -30,20 +32,38 @@ function useV2Path() {
   }] as const;
 }
 
+function useWelcomePath() {
+  const [isWelcome, setIsWelcome] = useState(() => window.location.pathname.startsWith('/welcome'));
+  useEffect(() => {
+    const sync = () => setIsWelcome(window.location.pathname.startsWith('/welcome'));
+    window.addEventListener('popstate', sync);
+    return () => window.removeEventListener('popstate', sync);
+  }, []);
+  return isWelcome;
+}
+
 function App() {
   const { authed, role, variant, login } = useAppStore();
   const [isV2, setIsV2] = useV2Path();
+  const isWelcome = useWelcomePath();
 
-  // Apply variant class to body (v1 calm/playful)
+  // Build-time feature flag (Railway: VITE_SHOW_V1). When false (the demo
+  // default), the legacy v1 surface is hidden — body.v2 is always on, the
+  // variant pill is gone, and the same code paths below resolve to the v2
+  // shells regardless of the URL path.
+  const showV1 = featureFlags.showV1;
+  const v2Active = !showV1 || isV2 || isWelcome;
+
+  // Apply variant class to body (v1 calm/playful) — kept for the showV1 path.
   useEffect(() => {
     document.body.classList.remove('variant-calm', 'variant-playful');
     document.body.classList.add(`variant-${variant}`);
   }, [variant]);
 
-  // Apply v2 class to body — scopes all v2 styles
+  // Apply v2 class to body — scopes all v2 styles. Forced on when v1 is hidden.
   useEffect(() => {
-    document.body.classList.toggle('v2', isV2);
-  }, [isV2]);
+    document.body.classList.toggle('v2', v2Active);
+  }, [v2Active]);
 
   const handleLogin = (r: Role, opts?: { childId?: string }) => {
     login(r, opts);
@@ -69,13 +89,18 @@ function App() {
     }
   };
 
+  // Public, parent-facing intake flow — no auth, no chrome.
+  if (isWelcome) {
+    return <IntakeFlow/>;
+  }
+
   return (
     <>
-      {isV2
+      {v2Active
         ? (authed ? renderRoleV2() : <LoginV2 onLogin={handleLogin}/>)
         : (authed ? renderRoleV1() : <LoginScreen onLogin={handleLogin}/>)}
       <ReviewGuide/>
-      <VariantSwitch isV2={isV2} onToggle={setIsV2}/>
+      {showV1 && <VariantSwitch isV2={isV2} onToggle={setIsV2}/>}
     </>
   );
 }

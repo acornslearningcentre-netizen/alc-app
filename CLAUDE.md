@@ -28,10 +28,23 @@ When working on onboarding, **start from the schema doc** above — it captures 
 
 ## Two design variants live in the same build
 
-- **v1 (default)** — Montessori cream/sage/ochre/plum, scoped to the absence of `body.v2`. Untouched.
-- **v2 "Watercolor Glass"** — frosted vellum cards on a warm watercolor wash, single Moss accent, soft pill chips, Nunito display. Scoped under `body.v2`.
-- A floating pill at the bottom-centre of every screen flips between them.
-- v2 path is `/v2`. The toggle pushes between `/` and `/v2` and the `body.v2` class follows.
+- **v2 "Watercolor Glass" (default and shipping surface)** — frosted vellum cards on a warm watercolor wash, single Moss accent, soft pill chips, Nunito display. Scoped under `body.v2`.
+- **v1** — original Montessori cream/sage/ochre/plum surface. Now legacy. Reachable only when the `VITE_SHOW_V1` flag is `true` (see *Feature flags* below).
+- New feature work is **v2-only** — do not add v1 components for new screens. Touching existing v1 components for bug fixes is fine; everything else skips v1 entirely.
+
+## Feature flags
+
+Build-time only — read via `import.meta.env.VITE_*` at `vite build` time, so changing a flag means redeploying (`railway up --service alc-app -c`).
+
+### `VITE_SHOW_V1`
+
+- **Default:** unset (treated as `false`).
+- **`true`** — variant pill renders, `/` and `/v2` paths toggle between v1 and v2 surfaces, `body.v2` follows the path.
+- **`false`** — `body.v2` is forced on every page, the variant pill is hidden, every URL renders the v2 surface.
+
+The flag itself lives in [`src/lib/feature-flags.ts`](src/lib/feature-flags.ts) — add new flags there alongside `showV1`. Type the env var in [`src/vite-env.d.ts`](src/vite-env.d.ts) so TypeScript doesn't infer `string | undefined` everywhere it's read.
+
+Production / demo Railway service ships with `VITE_SHOW_V1=false` so the client only sees v2.
 
 Files for v2:
 - `src/styles/v2/tokens.css` — Watercolor Glass tokens
