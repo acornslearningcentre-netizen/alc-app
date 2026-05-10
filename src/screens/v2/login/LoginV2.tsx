@@ -34,6 +34,10 @@ export const LoginV2: React.FC<Props> = ({ onLogin }) => {
     <div className="v2-login">
       <header className="v2-login-rule-top">
         <span className="v2-login-mark"><BrandLogo size="md" tone="dark"/></span>
+        <a className="v2-login-onboard" href="/welcome">
+          New here? Start onboarding
+          <Icon name="arrow-right" size={12} stroke="currentColor"/>
+        </a>
       </header>
 
       <div className="v2-login-stage">
