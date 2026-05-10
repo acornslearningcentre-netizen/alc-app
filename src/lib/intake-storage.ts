@@ -22,6 +22,8 @@ export interface IntakeDraft {
     name?: string;
     phone?: string;
   };
+  /** ISO timestamp of the last save — surfaced on the welcome-back card. */
+  savedAt?: string;
 }
 
 const emptyDraft = (): IntakeDraft => ({
@@ -42,6 +44,7 @@ export function loadDraft(): IntakeDraft {
       currentQuestionIdx: typeof parsed.currentQuestionIdx === 'number' ? parsed.currentQuestionIdx : 0,
       answers: (parsed.answers && typeof parsed.answers === 'object') ? parsed.answers : {},
       parent: (parsed.parent && typeof parsed.parent === 'object') ? parsed.parent : {},
+      savedAt: typeof parsed.savedAt === 'string' ? parsed.savedAt : undefined,
     };
   } catch {
     // Corrupt storage — start fresh rather than blow up the form.
@@ -52,7 +55,8 @@ export function loadDraft(): IntakeDraft {
 export function saveDraft(draft: IntakeDraft): void {
   if (typeof window === 'undefined') return;
   try {
-    window.localStorage.setItem(KEY, JSON.stringify(draft));
+    const stamped: IntakeDraft = { ...draft, savedAt: new Date().toISOString() };
+    window.localStorage.setItem(KEY, JSON.stringify(stamped));
   } catch {
     // Quota exhausted or storage disabled — fail silently. The form
     // still works in-memory; the parent just loses refresh-safety.

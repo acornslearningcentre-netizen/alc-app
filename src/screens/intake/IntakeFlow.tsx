@@ -1,20 +1,24 @@
-// Public intake form orchestrator (Stories A2–A5).
+// Public intake form orchestrator (Watercolor Glass redesign).
 //
-// Single self-contained surface for the parent-facing flow. Routing is
-// flat: this whole component is the body of `/welcome`, and step changes
-// are kept in component state (not the URL) so the parent can refresh
-// and pick up exactly where they left off via localStorage (A5).
+// Single self-contained surface for the parent-facing flow at `/welcome`.
+// Step changes live in component state (not the URL) so the parent can
+// refresh and resume via localStorage.
 //
 // State machine:
-//   welcome → parent → question (× 23) → review → thanks
+//   welcome → parent → question (× N) → review → thanks
 //
-// Back-links from review jump to a specific question by index.
+// `flowQuestions` excludes the consent questions — those are presented as
+// warm toggles on the review screen instead. The header shows three
+// sectioned-mark progress pills, labelled in Aishat's voice.
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  intakeQuestions,
+  flowQuestions,
   extractIndexedFields,
+  progressSectionFor,
+  sectionLabelFor,
   type IntakeAnswerValue,
+  type IntakeField,
 } from '../../data/intake-questions';
 import {
   loadDraft,
@@ -28,7 +32,6 @@ import { ParentStep } from './ParentStep';
 import { QuestionStep } from './QuestionStep';
 import { ReviewStep } from './ReviewStep';
 import { ThankYouStep } from './ThankYouStep';
-import { ProgressBar } from './ProgressBar';
 import '../../styles/v2/intake.css';
 
 const draftHasProgress = (d: IntakeDraft): boolean => {
@@ -36,6 +39,25 @@ const draftHasProgress = (d: IntakeDraft): boolean => {
   if (d.parent.email || d.parent.name || d.parent.phone) return true;
   return d.step !== 'welcome';
 };
+
+/** Compute the section progress fraction within whichever progress section
+ *  the field belongs to. Smooth fill across the questions in that section. */
+function sectionProgressFraction(field: IntakeField): number {
+  const section = progressSectionFor(field);
+  const inSection = flowQuestions.filter((q) => progressSectionFor(q) === section);
+  const positionInSection = inSection.findIndex((q) => q.id === field.id);
+  if (positionInSection < 0 || inSection.length === 0) return 0;
+  return (positionInSection + 1) / inSection.length;
+}
+
+/** Build a small "you were on" recap label from the field they last edited. */
+function recapLabel(field: IntakeField | null): string | undefined {
+  if (!field) return undefined;
+  // Strip trailing punctuation and lowercase the first letter so it reads
+  // as a sub-clause: "you were on 'how Iman approaches new things'".
+  const lower = field.label.replace(/[?.…]+$/, '').trim();
+  return lower.length > 60 ? lower.slice(0, 60).trim() + '…' : lower;
+}
 
 export const IntakeFlow = () => {
   const [draft, setDraft] = useState<IntakeDraft>(() => loadDraft());
@@ -50,7 +72,7 @@ export const IntakeFlow = () => {
     saveDraft(draft);
   }, [draft]);
 
-  // ── helpers (all stable identities for clarity, not memoised) ──
+  // ── helpers ──
   const setStep = (step: IntakeStep) => setDraft((d) => ({ ...d, step }));
   const setQuestionIdx = (idx: number) => setDraft((d) => ({ ...d, currentQuestionIdx: idx }));
   const setAnswer = (id: string, value: IntakeAnswerValue | undefined) =>
@@ -59,15 +81,31 @@ export const IntakeFlow = () => {
     setDraft((d) => ({ ...d, parent: { ...d.parent, ...next } }));
 
   const begin = () => setDraft((d) => ({ ...d, step: 'parent', currentQuestionIdx: 0 }));
-  const resume = () => {
-    // If they resumed but were already at thanks (impossible — clearDraft on
-    // submit), or had no real progress, snap to a sensible step.
-    if (!draftHasProgress(draft)) begin();
-  };
   const startOver = () => {
     clearDraft();
     setDraft({ step: 'welcome', currentQuestionIdx: 0, answers: {}, parent: {} });
     setSubmitError(null);
+  };
+
+  /** Pick the best step to land on when a parent says "pick up where I left off". */
+  const resumeStep = (): IntakeStep => {
+    if (draft.step === 'thanks') return 'welcome';
+    if (draft.step !== 'welcome') return draft.step;
+    // Prior session ended at welcome but answers/parent were collected — find
+    // the next unanswered question, fall back to parent step if nothing.
+    if (Object.keys(draft.answers).length > 0) return 'question';
+    if (draft.parent.email) return 'question';
+    return 'parent';
+  };
+
+  const onResume = () => {
+    const next = resumeStep();
+    if (next === 'question' && (!draft.parent.email)) {
+      // No parent contact yet but answers exist — start at parent step.
+      setStep('parent');
+    } else {
+      setStep(next);
+    }
   };
 
   const goToQuestion = (idx: number) => {
@@ -75,7 +113,7 @@ export const IntakeFlow = () => {
   };
 
   const nextFromQuestion = () => {
-    if (draft.currentQuestionIdx >= intakeQuestions.length - 1) {
+    if (draft.currentQuestionIdx >= flowQuestions.length - 1) {
       setStep('review');
     } else {
       setQuestionIdx(draft.currentQuestionIdx + 1);
@@ -109,8 +147,6 @@ export const IntakeFlow = () => {
         const err = await res.json().catch(() => ({}));
         throw new Error(err.error || 'Sorry, we couldn\'t save your form. Please try again in a moment.');
       }
-      // Successfully persisted — clear the draft so a refresh shows the
-      // welcome screen and doesn't tempt a second submission.
       clearDraft();
       setDraft((d) => ({ ...d, step: 'thanks' }));
     } catch (e) {
@@ -120,42 +156,55 @@ export const IntakeFlow = () => {
     }
   };
 
-  // ── derived view state ──────────────────────────────────────────────────
-  const totalQ = intakeQuestions.length;
-  const currentField = draft.step === 'question' ? intakeQuestions[draft.currentQuestionIdx] : null;
+  // ── derived view state ──
+  const currentField = draft.step === 'question' ? flowQuestions[draft.currentQuestionIdx] : null;
+  const totalFlow = flowQuestions.length;
+
   const childFirstName = useMemo(() => {
     const cn = typeof draft.answers['child_name'] === 'string' ? draft.answers['child_name'] : '';
     return cn?.trim().split(/\s+/)[0] || undefined;
   }, [draft.answers]);
 
-  const progressFraction =
-    draft.step === 'welcome' ? 0
-    : draft.step === 'parent' ? 0.02
-    : draft.step === 'question' ? (draft.currentQuestionIdx + 1) / (totalQ + 1)
-    : draft.step === 'review' ? 0.97
-    : 1;
+  const hobbiesSnippet = useMemo(() => {
+    const v = draft.answers['hobbies'];
+    if (typeof v !== 'string') return undefined;
+    return v.trim() || undefined;
+  }, [draft.answers]);
+
+  const lastEditedField = useMemo<IntakeField | null>(() => {
+    if (draft.step === 'question' && currentField) return currentField;
+    if (draft.currentQuestionIdx >= 0 && draft.currentQuestionIdx < flowQuestions.length) {
+      return flowQuestions[draft.currentQuestionIdx];
+    }
+    return null;
+  }, [draft.step, draft.currentQuestionIdx, currentField]);
 
   return (
     <div className="intake-shell">
-      {draft.step !== 'welcome' && draft.step !== 'thanks' && (
-        <header className="intake-header">
+      <header className="intake-header">
+        <a href="/" className="intake-brand-link" aria-label="Back to Acorns home">
+          <span aria-hidden="true" className="intake-brand-arrow">←</span>
           <span className="intake-brand">Acorns Learning Centre</span>
-          <ProgressBar
-            fraction={progressFraction}
-            section={currentField?.section}
-          />
-        </header>
-      )}
+        </a>
+      </header>
 
       <main className="intake-main">
         {draft.step === 'welcome' && (
           <WelcomeStep
             hasDraft={draftHasProgress(draft)}
+            draftAt={recapLabel(lastEditedField)}
+            draftSnippet={
+              childFirstName
+                ? `${childFirstName}${
+                    typeof draft.answers['year_group'] === 'string' && draft.answers['year_group']
+                      ? `, ${draft.answers['year_group']}`
+                      : ''
+                  }${draft.parent.email ? `, ${draft.parent.email}` : ''}`
+                : undefined
+            }
+            lastSavedAt={draft.savedAt}
             onBegin={begin}
-            onResume={() => {
-              // Land them at whichever step the draft is at, defaulting to parent.
-              if (draft.step === 'welcome') resume();
-            }}
+            onResume={onResume}
             onStartOver={startOver}
           />
         )}
@@ -173,14 +222,16 @@ export const IntakeFlow = () => {
 
         {draft.step === 'question' && currentField && (
           <QuestionStep
-            // Force a fresh component per question so internal state (touched, refs) resets.
+            // Force a fresh component per question so internal state resets.
             key={currentField.id}
             field={currentField}
             value={draft.answers[currentField.id]}
             onChange={(next) => setAnswer(currentField.id, next)}
             onBack={backFromQuestion}
             onNext={nextFromQuestion}
-            isLast={draft.currentQuestionIdx === totalQ - 1}
+            isLast={draft.currentQuestionIdx === totalFlow - 1}
+            sectionFraction={sectionProgressFraction(currentField)}
+            sectionLabel={sectionLabelFor(currentField)}
           />
         )}
 
@@ -189,10 +240,12 @@ export const IntakeFlow = () => {
             draft={draft}
             submitting={submitting}
             submitError={submitError}
+            childFirstName={childFirstName}
             onEditQuestion={goToQuestion}
             onEditParent={() => setStep('parent')}
+            onAnswerChange={setAnswer}
             onSubmit={submit}
-            onBack={() => goToQuestion(totalQ - 1)}
+            onBack={() => goToQuestion(totalFlow - 1)}
           />
         )}
 
@@ -200,9 +253,11 @@ export const IntakeFlow = () => {
           <ThankYouStep
             parentName={draft.parent.name}
             childFirstName={childFirstName}
+            hobbiesSnippet={hobbiesSnippet}
           />
         )}
       </main>
+
     </div>
   );
 };

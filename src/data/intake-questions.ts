@@ -49,6 +49,9 @@ export interface IntakeField {
   hasOther?: boolean;
   /** Marks the highest-signal questions for UI + AI prompt weighting. */
   emphasis?: 'high';
+  /** Optional "starter" chips for free-text fields — give shy parents a way in.
+   *  Used today on the hobbies question; tap a chip to drop it into the answer. */
+  starters?: string[];
 }
 
 /** Lead paragraph shown on the welcome screen before Q1. */
@@ -253,10 +256,12 @@ export const intakeQuestions: IntakeField[] = [
   {
     id: 'hobbies',
     section: 2,
-    label: 'What does your child really enjoy or get excited about?',
-    helper: 'e.g. games, hobbies, characters, topics, sports — anything goes.',
+    label: 'What lights them up?',
+    helper:
+      'The stuff they bring up uninvited. Pets, characters, sports, the project that takes over the dining table. There’s no wrong answer — and the more you share, the more we can build a session around it.',
     type: 'longtext',
     emphasis: 'high',
+    starters: ['Lego', 'dinosaurs', 'football', 'drawing', 'animals', 'puzzles', 'cooking', 'music'],
   },
   {
     id: 'avoid_dislike',
@@ -333,6 +338,36 @@ export const intakeSectionTitles: Record<typeof intakeSections[number], string> 
 export const requiredQuestionIds: string[] = intakeQuestions
   .filter((q) => q.required)
   .map((q) => q.id);
+
+/** Question ids whose answers are collected outside the question loop —
+ *  rendered as toggles on the review screen instead of full screens. */
+export const consentQuestionIds = ['consent_notes', 'consent_media'] as const;
+
+/** Questions shown one-per-screen in the form (everything except consents). */
+export const flowQuestions: IntakeField[] = intakeQuestions.filter(
+  (q) => !(consentQuestionIds as readonly string[]).includes(q.id),
+);
+
+/** Section label shown above the progress bar for a given field. */
+export function sectionLabelFor(field: IntakeField): string {
+  if (field.id === 'hobbies') return 'About your child · the most important question';
+  if (field.id === 'twelve_week_vision') return 'What you’re hoping for';
+  if (field.id === 'approach_to_tasks' || field.id === 'mistake_response' || field.id === 'focus_aids') return 'How they learn';
+  if (field.id === 'tech_comfort_parent' || field.id === 'tech_comfort_child' || field.id === 'screen_boundaries' || field.id === 'home_practice_time' || field.id === 'homework_in_plan') return 'Routines & technology';
+  switch (field.section) {
+    case 1: return 'About your child';
+    case 2: return 'About your child';
+    case 3: return 'A few quieter things';
+  }
+}
+
+/** Maps a flow-question section to the 3-mark progress bar's section number.
+ *  Schema sections 1 & 2 both map to progress section 2 (about-the-child);
+ *  schema section 3 maps to progress section 3. The parent contact step is
+ *  progress section 1 — handled at the IntakeFlow layer. */
+export function progressSectionFor(field: IntakeField): 1 | 2 | 3 {
+  return field.section === 3 ? 3 : 2;
+}
 
 /** Shape stored in the localStorage cache (A5) and POSTed to /api/intake (A4). */
 export type IntakeAnswerValue =

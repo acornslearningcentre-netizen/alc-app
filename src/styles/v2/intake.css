@@ -29,46 +29,87 @@ body.v2 .intake-header {
   backdrop-filter: var(--v2-blur);
   -webkit-backdrop-filter: var(--v2-blur);
 }
+body.v2 .intake-brand-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  text-decoration: none;
+  color: var(--v2-ink);
+  padding: 6px 10px;
+  margin: -6px -10px;
+  border-radius: var(--v2-r-md);
+  transition: background var(--v2-dur-fast) var(--v2-ease),
+              color var(--v2-dur-fast) var(--v2-ease);
+}
+body.v2 .intake-brand-link:hover {
+  background: var(--v2-moss-soft);
+  color: var(--v2-moss);
+  text-decoration: none;
+}
+body.v2 .intake-brand-arrow {
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1;
+  transition: transform var(--v2-dur-fast) var(--v2-ease);
+}
+body.v2 .intake-brand-link:hover .intake-brand-arrow {
+  transform: translateX(-2px);
+}
 body.v2 .intake-brand {
   font-family: var(--v2-display, 'Nunito', sans-serif);
   font-weight: 800;
   font-size: 15px;
   letter-spacing: -0.01em;
-  color: var(--v2-ink);
   white-space: nowrap;
 }
-body.v2 .intake-progress {
+/* Sectioned-marks progress: three small pills, done/current/future.
+   The current mark fills smoothly under hand; past marks rest in muted
+   Moss; future sit as hairlines. No "Page X of 3" — the parent's real
+   question isn't how-many, it's am-I-nearly-through. */
+body.v2 .intake-progress-wrap {
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
   min-width: 0;
 }
-body.v2 .intake-progress-bar {
-  height: 6px;
-  border-radius: 999px;
-  background: var(--v2-pith);
-  overflow: hidden;
-  position: relative;
-}
-body.v2 .intake-progress-fill {
-  height: 100%;
-  background: linear-gradient(90deg, var(--v2-moss), var(--v2-moss-2));
-  border-radius: 999px;
-  transition: width 360ms var(--v2-spring);
-}
-body.v2 .intake-progress-meta {
+body.v2 .intake-progress {
   display: flex;
-  align-items: center;
   gap: 8px;
-  font-size: 12px;
-  color: var(--v2-mist);
-  font-weight: 600;
-  letter-spacing: 0.02em;
+  align-items: center;
 }
-body.v2 .intake-progress-section { color: var(--v2-moss); }
-body.v2 .intake-progress-dot { opacity: 0.45; }
-body.v2 .intake-progress-title { color: var(--v2-mist); font-weight: 500; }
+body.v2 .intake-progress .mark {
+  flex: 1;
+  height: 4px;
+  max-width: 56px;
+  border-radius: 999px;
+  background: var(--v2-hairline-2);
+  position: relative;
+  overflow: hidden;
+}
+body.v2 .intake-progress .mark.done {
+  background: var(--v2-moss);
+  opacity: 0.55;
+}
+body.v2 .intake-progress .mark.current {
+  background: var(--v2-moss-soft);
+}
+body.v2 .intake-progress .mark.current::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  width: var(--p, 50%);
+  background: linear-gradient(90deg, var(--v2-moss) 0%, var(--v2-moss-2) 100%);
+  border-radius: 999px;
+  transition: width 480ms var(--v2-spring);
+}
+body.v2 .intake-progress-label {
+  font-size: 12px;
+  color: var(--v2-pencil);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  font-weight: 600;
+}
 
 /* ── Main stage ─────────────────────────────────────────────────────────── */
 body.v2 .intake-main {
@@ -459,3 +500,376 @@ body.v2 .intake-next-list {
 }
 body.v2 .intake-next-list li::marker { color: var(--v2-moss); font-weight: 800; }
 body.v2 .intake-next-list strong { color: var(--v2-moss); font-weight: 700; }
+
+/* ──────────────────────────────────────────────────────────────────────────
+   Watercolor Glass redesign — components from the Acorns Onboarding design
+   handoff (claude.ai/design). These extend the base intake-* vocabulary
+   above with the bits the design needs that didn't exist in v1: vellum
+   variants, the hobbies-card with localised wash + Moss-dot pulse, the
+   timeline + signature for the thank-you screen, the review-row layout
+   and consent toggles, the listening dot for "saved on this device",
+   chip variants, and the bottom-bar layout.
+   ────────────────────────────────────────────────────────────────────── */
+
+/* Card surface variants */
+body.v2 .intake-card--solid {
+  background: var(--v2-vellum-solid);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+body.v2 .intake-card--strong {
+  background: var(--v2-vellum-strong);
+}
+
+/* The hobbies card — earned weight via composition, not a different colour.
+   Slightly larger radius, localised sage + ochre wash bleeding from the
+   corners, bigger padding. The single Moss-dot pulse mark says "we are
+   paying attention to this one" without needing a heading. */
+body.v2 .hobbies-card {
+  position: relative;
+  background: linear-gradient(180deg, rgba(251, 247, 236, 0.78) 0%, rgba(251, 247, 236, 0.55) 100%);
+  border: 1px solid var(--v2-hairline);
+  border-radius: 28px;
+  padding: clamp(28px, 4.5vw, 44px);
+  overflow: hidden;
+  box-shadow: var(--v2-shadow-lift);
+}
+body.v2 .hobbies-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(40% 30% at 12% 100%, rgba(159, 179, 154, 0.22), transparent 70%),
+    radial-gradient(40% 30% at 100% 0%, rgba(217, 164, 65, 0.18), transparent 70%);
+  pointer-events: none;
+  z-index: 0;
+}
+body.v2 .hobbies-card > * { position: relative; z-index: 1; }
+
+body.v2 .hobbies-mark {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: var(--v2-moss-soft);
+  color: var(--v2-moss);
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-weight: 600;
+}
+body.v2 .hobbies-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--v2-moss);
+  animation: intake-pulse 2.6s ease-in-out infinite;
+}
+@keyframes intake-pulse {
+  0%, 100% { opacity: 0.45; transform: scale(1); }
+  50%      { opacity: 1;    transform: scale(1.18); }
+}
+@media (prefers-reduced-motion: reduce) {
+  body.v2 .hobbies-dot { animation: none; opacity: 0.85; }
+}
+
+/* Aishat's voice — italic Nunito Moss, used on review and thank-you. */
+body.v2 .intake-signature {
+  font-family: var(--v2-display, 'Nunito', sans-serif);
+  font-style: italic;
+  font-weight: 700;
+  color: var(--v2-moss);
+}
+
+/* Timeline (thank-you "what's happening on my side") */
+body.v2 .intake-timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+body.v2 .intake-timeline-row {
+  display: grid;
+  grid-template-columns: 28px 1fr;
+  gap: 14px;
+  align-items: flex-start;
+}
+body.v2 .intake-timeline-rail {
+  position: relative;
+}
+body.v2 .intake-timeline-rail .node {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: var(--v2-moss);
+  margin: 6px 0 0 9px;
+}
+body.v2 .intake-timeline-rail .node.future { background: var(--v2-moss-soft); }
+body.v2 .intake-timeline-rail::before {
+  content: '';
+  position: absolute;
+  left: 13px;
+  top: 18px;
+  bottom: -18px;
+  width: 1.5px;
+  background: var(--v2-hairline-2);
+}
+body.v2 .intake-timeline-row:last-child .intake-timeline-rail::before { display: none; }
+body.v2 .intake-timeline-when {
+  font-size: 12px;
+  color: var(--v2-pencil);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  font-weight: 600;
+}
+body.v2 .intake-timeline-what {
+  font-size: 15.5px;
+  color: var(--v2-ink);
+  margin-top: 2px;
+  line-height: 1.5;
+}
+
+/* Review section header layout — title on the left, count or Edit on the right. */
+body.v2 .intake-review-section-count {
+  font-size: 12.5px;
+  font-style: italic;
+  color: var(--v2-pencil);
+}
+body.v2 .intake-toggle-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+body.v2 .intake-review-footer {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 22px;
+  padding-top: 18px;
+  border-top: 1px solid var(--v2-hairline);
+}
+
+/* Review row — a question / answer / Edit triple, repeated. */
+body.v2 .intake-review-card {
+  background: var(--v2-vellum-strong);
+  border-radius: var(--v2-r-lg);
+  padding: 4px 18px;
+  border: 1px solid var(--v2-hairline);
+}
+body.v2 .review-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 12px;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--v2-hairline);
+  align-items: flex-start;
+}
+body.v2 .review-row:last-child { border-bottom: 0; }
+body.v2 .review-q {
+  font-size: 13px;
+  color: var(--v2-pencil);
+  margin-bottom: 4px;
+}
+body.v2 .review-a {
+  font-size: 15.5px;
+  color: var(--v2-ink);
+  line-height: 1.5;
+}
+body.v2 .review-a.empty {
+  color: var(--v2-pencil);
+  font-style: italic;
+}
+body.v2 .review-edit {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--v2-moss);
+  font-size: 13.5px;
+  font-weight: 500;
+  padding: 4px 8px;
+  border-radius: 8px;
+  font-family: inherit;
+}
+body.v2 .review-edit:hover { background: var(--v2-moss-soft); }
+
+/* Consent toggles — replace the v1 GDPR radio pair on the review screen. */
+body.v2 .intake-toggle {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 16px;
+  align-items: flex-start;
+  padding: 16px;
+  border-radius: var(--v2-r-md);
+  border: 1px solid var(--v2-hairline-2);
+  background: rgba(255, 255, 255, 0.42);
+  cursor: pointer;
+  transition: background var(--v2-dur-fast) var(--v2-spring),
+              border-color var(--v2-dur-fast) var(--v2-spring);
+  text-align: left;
+  font-family: inherit;
+  width: 100%;
+}
+body.v2 .intake-toggle:hover { background: rgba(255, 255, 255, 0.65); }
+body.v2 .intake-toggle.is-on {
+  border-color: var(--v2-moss);
+  background: var(--v2-moss-soft);
+}
+body.v2 .intake-toggle-title {
+  font-weight: 600;
+  color: var(--v2-ink);
+  font-size: 15px;
+}
+body.v2 .intake-toggle-help {
+  color: var(--v2-pencil);
+  font-size: 13px;
+  margin-top: 4px;
+  line-height: 1.5;
+}
+body.v2 .intake-toggle-track {
+  width: 44px;
+  height: 26px;
+  border-radius: 999px;
+  background: var(--v2-hairline-2);
+  position: relative;
+  flex-shrink: 0;
+  transition: background var(--v2-dur-fast) var(--v2-spring);
+}
+body.v2 .intake-toggle-track::after {
+  content: '';
+  position: absolute;
+  left: 3px;
+  top: 3px;
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  background: white;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+  transition: left var(--v2-dur-fast) var(--v2-spring);
+}
+body.v2 .intake-toggle.is-on .intake-toggle-track { background: var(--v2-moss); }
+body.v2 .intake-toggle.is-on .intake-toggle-track::after { left: 21px; }
+
+/* Listening dot — "saved on this device" reassurance in bottom bars. */
+body.v2 .intake-listening {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  color: var(--v2-pencil);
+}
+body.v2 .intake-listening .dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--v2-moss);
+  animation: intake-pulse 2.6s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  body.v2 .intake-listening .dot { animation: none; opacity: 0.85; }
+}
+
+/* Stacked field group — used on parent contact + child basics. */
+body.v2 .intake-field-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* Bottom-row actions: back · [optional listening dot] · next. The flex-spacer
+   lives inside the JSX so a row without a listening dot still pushes Next to
+   the right. */
+body.v2 .intake-actions--row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 18px;
+  flex-wrap: wrap;
+  justify-content: flex-start;
+}
+body.v2 .intake-actions-spacer { flex: 1 1 auto; }
+
+/* Chip row — small wrap layout for tone chips on welcome and starter chips on hobbies. */
+body.v2 .intake-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+/* Chip variants — used for tone (welcome reassurance) and added (hobbies). */
+body.v2 .intake-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.5);
+  border: 1px solid var(--v2-hairline-2);
+  font-size: 13.5px;
+  color: var(--v2-mist);
+  font-family: inherit;
+  cursor: pointer;
+  transition: background var(--v2-dur-fast) var(--v2-spring),
+              color var(--v2-dur-fast) var(--v2-spring),
+              border-color var(--v2-dur-fast) var(--v2-spring);
+}
+body.v2 .intake-chip:hover {
+  background: rgba(255, 255, 255, 0.78);
+  color: var(--v2-ink);
+}
+body.v2 .intake-chip.is-added {
+  background: var(--v2-moss-soft);
+  border-color: var(--v2-moss);
+  color: var(--v2-moss);
+}
+body.v2 .intake-chip.is-tone {
+  background: rgba(255, 255, 255, 0.62);
+  color: var(--v2-moss);
+  border-color: rgba(63, 92, 68, 0.18);
+  cursor: default;
+}
+
+/* Hero name input — slightly larger Nunito for the question that names the
+   child whose name will be used downstream. */
+body.v2 .intake-input--hero {
+  font-family: var(--v2-display, 'Nunito', sans-serif);
+  font-size: 22px;
+  font-weight: 600;
+  padding: 18px;
+}
+
+/* Required marker (Moss dot, never Terra — Terra is reserved for state). */
+body.v2 .intake-required-mark {
+  color: var(--v2-moss);
+  font-weight: 700;
+  margin: 0 4px;
+}
+
+/* Larger heading on emphasis: high questions (hobbies). */
+body.v2 .intake-question--hero {
+  font-size: clamp(28px, 4.4vw, 48px);
+}
+
+/* Saved-draft snippet on the welcome-back card. */
+body.v2 .intake-saved-snippet {
+  margin-top: 18px;
+  padding: 14px 16px;
+  background: var(--v2-vellum-solid);
+  border: 1px solid var(--v2-hairline-2);
+  border-radius: var(--v2-r-md);
+}
+body.v2 .intake-saved-snippet-meta {
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--v2-pencil);
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+body.v2 .intake-saved-snippet-text {
+  font-size: 14.5px;
+  color: var(--v2-ink);
+}
