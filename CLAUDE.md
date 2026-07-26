@@ -11,9 +11,10 @@ The app is **not** an AI that teaches. It wraps existing learning tools (IXL, Ce
 ## Active milestone
 
 **Onboarding journey for client demo on 2026-05-10** (compressed one-week sprint).
-- Plan: [documents/PLAN-onboarding-journey.md](documents/PLAN-onboarding-journey.md)
-- Latest interview: [documents/2026-05-03-meeting-summary.md](documents/2026-05-03-meeting-summary.md)
-- Real intake form questions: [documents/onboarding-form-schema.md](documents/onboarding-form-schema.md)
+- Plan: [documents/features/onboarding/PLAN-onboarding-journey.md](documents/features/onboarding/PLAN-onboarding-journey.md)
+- Latest interview: [documents/features/onboarding/2026-05-03-meeting-summary.md](documents/features/onboarding/2026-05-03-meeting-summary.md)
+- Real intake form questions: [documents/features/onboarding/onboarding-form-schema.md](documents/features/onboarding/onboarding-form-schema.md)
+- Design brief: [documents/features/onboarding/onboarding-design-prompt.md](documents/features/onboarding/onboarding-design-prompt.md)
 - JIRA project: [`SCRUM` on acornslearningcentre.atlassian.net](https://acornslearningcentre.atlassian.net/jira/software/projects/SCRUM/boards/34/backlog).
 
 When working on onboarding, **start from the schema doc** above — it captures the exact question set Aishat uses today.
@@ -121,7 +122,10 @@ frontend/
 │       └── v2/                                   v2 layouts (Teacher Today is bespoke; the rest reuse v1 inner views inside a v2 shell)
 └── package.json                              react, vite, express (for static-server.js only)
 
-documents/                                    meeting summaries, plans, schemas, feature/API requirement docs
+documents/
+├── api/                                        per-feature API requirement docs (endpoints + acceptance criteria)
+└── features/                                   per-feature UX requirement docs (plain-language acceptance criteria)
+    └── onboarding/                              onboarding plan, meeting notes, form schema, design brief
 ```
 
 ## Reviewer guide
