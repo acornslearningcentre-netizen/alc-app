@@ -230,6 +230,7 @@ When picking up a piece of work that starts from a Jira ticket (e.g. "pick up SC
 6. Once told testing is complete: merge the PR into `main`. Because both app services auto-deploy on push to `main` (see *Deployment — Railway* above), merging **is** the deploy trigger — there's no separate deploy step.
 7. Confirm CI is green on the resulting `main` commit and that both Railway services redeployed successfully (`railway status` for `alc-app-backend` and `alc-app-frontend`, or the "Deploy code" verification steps above). If CI fails post-merge despite passing on the PR (flaky test, environment drift), flag it — don't treat the merge as done until it's green.
 8. **Transition the ticket to "Done" in Jira** (transition id `41`) once the deploy is confirmed working. Don't mark it Done before that confirmation, even if the merge itself succeeded.
+9. **Delete the feature branch** — both locally and on `origin` — once its merge into `main` is complete and confirmed deployed (step 7). Never delete a branch before that confirmation, even if it looks safe. Verify with `git merge-base --is-ancestor origin/<branch> origin/main` before deleting if there's any doubt about whether it actually merged clean.
 
 ### Jira Development panel — one-time setup needed from you
 
