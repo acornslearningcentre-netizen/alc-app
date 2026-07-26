@@ -785,6 +785,23 @@ app.delete('/api/observations/:id', ah(async (req, res) => {
   res.status(204).end();
 }));
 
+// TEMPORARY — one-time export of the pre-Postgres SQLite file for data
+// migration. Guarded by a secret token; remove this route once the
+// migration is done (see MIGRATE_EXPORT_TOKEN in Railway variables).
+if (process.env.MIGRATE_EXPORT_TOKEN) {
+  app.get('/api/_migrate/export-sqlite', (req, res) => {
+    const token = trim(req.query.token);
+    const expected = process.env.MIGRATE_EXPORT_TOKEN;
+    const match = token.length === expected.length &&
+      crypto.timingSafeEqual(Buffer.from(token), Buffer.from(expected));
+    if (!match) return res.status(404).end();
+    const filePath = path.join(process.env.DATA_DIR || '/data', 'review.db');
+    res.download(filePath, 'review.db', (err) => {
+      if (err && !res.headersSent) res.status(404).json({ error: 'file not found' });
+    });
+  });
+}
+
 app.get('/api/health', ah(async (_req, res) => {
   await pool.query('SELECT 1');
   res.json({ ok: true });
