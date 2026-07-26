@@ -245,6 +245,8 @@ This is separate from the **"Deploy code"** instruction above, which is for dire
 - **The "hobbies" question (Q17 on the intake form) is the single highest-signal data point.** AI prompts that draft assessment reports should weight it heavily.
 - **The first 4 weeks of a child's enrolment are continuous reassessment.** The baseline isn't a single moment — it's a window. Schemas and prompts must accommodate "I thought X but actually Y" updates.
 - **GDPR matters.** Storing minor children's data needs a plain-language consent line on the intake form (Q22 + Q23). Don't ship to real prospects without it.
+- **Whenever a ticket touches login/credentials, surface working test credentials when reporting completion.** The user needs to actually log in and try it — don't make them ask for it separately.
+- **Completion summaries are short, punchy, bullet-pointed, plain language — never verbose.** What changed, what's next, what's needed from them. No headers-within-headers, no restating the whole ticket back.
 
 ## Not in scope (yet)
 
