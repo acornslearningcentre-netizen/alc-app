@@ -257,14 +257,28 @@ const requireAuth = (req, res, next) => {
 // Demo seed accounts — mirrors the passcodes already in src/data/seed.ts so
 // the same demo login story works with a real backend behind it. Only runs
 // once (skipped if any user already exists).
+//
+// Passcodes are the same ones already shown on the login screen ("Demo
+// passcodes: ...") and hardcoded in src/data/seed.ts, so seeding them here
+// doesn't expose anything new. Staff passwords are real credentials and are
+// NEVER hardcoded — they're only seeded if DEMO_TEACHER_PASSWORD /
+// DEMO_LEADER_PASSWORD are set as env vars (e.g. in Railway); otherwise
+// those two accounts are skipped and a warning is logged.
 const AUTH_SEED = [
-  { role: 'teacher', email: 'ana@acornslearningcentre.com', password: 'AcornsDemo!1', name: 'Ana' },
-  { role: 'leader', email: 'leader@acornslearningcentre.com', password: 'AcornsDemo!1', name: 'Dr. Okafor' },
+  { role: 'teacher', email: 'ana@acornslearningcentre.com', password: process.env.DEMO_TEACHER_PASSWORD, name: 'Ana' },
+  { role: 'leader', email: 'leader@acornslearningcentre.com', password: process.env.DEMO_LEADER_PASSWORD, name: 'Dr. Okafor' },
   { role: 'parent', passcode: '0000', name: 'Ravi Shah', child_id: 'c5' },
   { role: 'student', passcode: '0000', name: 'Amara', child_id: 'c1' },
   { role: 'student', passcode: '1111', name: 'Mei', child_id: 'c3' },
-];
-if (db.prepare('SELECT COUNT(*) AS n FROM users').get().n === 0) {
+].filter((u) => u.password !== undefined || u.passcode !== undefined);
+
+for (const { role, envVar } of [{ role: 'teacher', envVar: 'DEMO_TEACHER_PASSWORD' }, { role: 'leader', envVar: 'DEMO_LEADER_PASSWORD' }]) {
+  if (!process.env[envVar]) {
+    console.warn(`${envVar} is not set — skipping demo ${role} account seed. Set it (in Railway for production) to enable demo ${role} login.`);
+  }
+}
+
+if (db.prepare('SELECT COUNT(*) AS n FROM users').get().n === 0 && AUTH_SEED.length > 0) {
   const insertUser = db.prepare(`
     INSERT INTO users (role, email, password_hash, passcode_hash, name, child_id)
     VALUES (@role, @email, @password_hash, @passcode_hash, @name, @child_id)
