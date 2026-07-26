@@ -255,8 +255,11 @@ const requireAuth = (req, res, next) => {
 };
 
 // Demo seed accounts — mirrors the passcodes already in src/data/seed.ts so
-// the same demo login story works with a real backend behind it. Only runs
-// once (skipped if any user already exists).
+// the same demo login story works with a real backend behind it. Each
+// account is seeded independently (checked by email or by role+passcode) so
+// that e.g. adding DEMO_TEACHER_PASSWORD later still seeds the teacher
+// account even though the parent/student passcodes were already seeded on
+// an earlier boot — this is NOT a single "table is empty" gate.
 //
 // Passcodes are the same ones already shown on the login screen ("Demo
 // passcodes: ...") and hardcoded in src/data/seed.ts, so seeding them here
@@ -278,25 +281,33 @@ for (const { role, envVar } of [{ role: 'teacher', envVar: 'DEMO_TEACHER_PASSWOR
   }
 }
 
-if (db.prepare('SELECT COUNT(*) AS n FROM users').get().n === 0 && AUTH_SEED.length > 0) {
+{
   const insertUser = db.prepare(`
     INSERT INTO users (role, email, password_hash, passcode_hash, name, child_id)
     VALUES (@role, @email, @password_hash, @passcode_hash, @name, @child_id)
   `);
+  const findByEmail = db.prepare('SELECT 1 FROM users WHERE email = ?');
+  const findByPasscode = db.prepare('SELECT 1 FROM users WHERE role = ? AND passcode_hash = ?');
+  let seeded = 0;
   const seedTx = db.transaction(() => {
     for (const u of AUTH_SEED) {
+      const email = u.email ? u.email.toLowerCase() : null;
+      const passcodeHash = u.passcode ? hashPasscode(u.passcode) : null;
+      const exists = email ? findByEmail.get(email) : findByPasscode.get(u.role, passcodeHash);
+      if (exists) continue;
       insertUser.run({
         role: u.role,
-        email: u.email ? u.email.toLowerCase() : null,
+        email,
         password_hash: u.password ? hashPassword(u.password) : null,
-        passcode_hash: u.passcode ? hashPasscode(u.passcode) : null,
+        passcode_hash: passcodeHash,
         name: u.name,
         child_id: u.child_id ?? null,
       });
+      seeded += 1;
     }
   });
   seedTx();
-  console.log(`Seeded ${AUTH_SEED.length} demo auth accounts`);
+  if (seeded > 0) console.log(`Seeded ${seeded} demo auth account(s)`);
 }
 
 const app = express();
