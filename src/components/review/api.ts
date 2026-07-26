@@ -1,5 +1,7 @@
-// Tiny fetch helpers for the Review Guide. Endpoints live on the same origin
-// (Express in production, Vite proxy in dev).
+// Tiny fetch helpers for the Review Guide. The API is a separate Railway
+// service — see src/lib/api-base.ts (VITE_API_BASE_URL).
+import { apiUrl } from '../../lib/api-base';
+
 export interface AreaFeedback {
   id: number;
   area_key: string;
@@ -45,8 +47,8 @@ export const PRIORITY_META: Record<Priority, { label: string; emoji: string }> =
   v2: { label: 'Save for v2', emoji: '🔵' },
 };
 
-async function http<T>(url: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(url, {
+async function http<T>(path: string, init?: RequestInit): Promise<T> {
+  const res = await fetch(apiUrl(path), {
     headers: { 'Content-Type': 'application/json' },
     ...init,
   });

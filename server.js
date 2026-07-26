@@ -1,19 +1,16 @@
-// Express server: serves the built Vite SPA and exposes the API + Postgres store.
-// Two surfaces share the same database (DATABASE_URL, a Railway Postgres plugin):
+// Express server: API-only backend, backed by Postgres. The frontend is a
+// separate Railway service (static-server.js) that serves the built Vite
+// SPA and talks to this service cross-origin — see CORS_ORIGIN below.
 //   - /api/review/*    — reviewer-guide feedback (existing)
 //   - /api/intake, /api/prospects/*, /api/assessments/*, /api/observations/*
 //     — onboarding journey (Epic B onwards)
 //   - /api/auth/*      — real login/session backend (SCRUM-16, Sprint 1)
-// Previously SQLite (better-sqlite3) on a Railway volume; migrated to Postgres
-// so the API and frontend services can be split without sharing a local file.
 import express from 'express';
+import cors from 'cors';
 import pg from 'pg';
-import path from 'node:path';
 import crypto from 'node:crypto';
-import { fileURLToPath } from 'node:url';
 
 const { Pool } = pg;
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT) || 3000;
 
 if (!process.env.DATABASE_URL) {
@@ -316,6 +313,14 @@ async function seedDemoAccounts() {
 
 const app = express();
 app.set('trust proxy', 1); // Railway sits behind a proxy — needed for accurate req.ip
+
+// CORS_ORIGIN: comma-separated list of allowed frontend origins, e.g.
+// "https://alc-app-frontend.up.railway.app". Falls back to reflecting the
+// request origin (permissive) if unset, so local dev keeps working without
+// extra config — set it explicitly in Railway once the frontend domain is known.
+const corsOrigins = (process.env.CORS_ORIGIN || '').split(',').map((s) => s.trim()).filter(Boolean);
+app.use(cors({ origin: corsOrigins.length > 0 ? corsOrigins : true }));
+
 app.use(express.json({ limit: '64kb' }));
 
 // ── API ──────────────────────────────────────────────────────────────────────
@@ -790,10 +795,40 @@ app.get('/api/health', ah(async (_req, res) => {
   res.json({ ok: true });
 }));
 
-// ── Static SPA ───────────────────────────────────────────────────────────────
-const distDir = path.join(__dirname, 'dist');
-app.use(express.static(distDir));
-app.get('*', (_req, res) => res.sendFile(path.join(distDir, 'index.html')));
+// TEMPORARY — one-time cleanup of duplicate demo-account rows accidentally
+// inserted by a local test run against production. Dry-run by default
+// (SELECT only); pass ?apply=1 to actually delete. Remove this route once
+// cleanup is confirmed (see ADMIN_TASK_TOKEN in Railway variables).
+if (process.env.ADMIN_TASK_TOKEN) {
+  app.get('/api/_admin/dedupe-users', ah(async (req, res) => {
+    const token = trim(req.query.token);
+    const expected = process.env.ADMIN_TASK_TOKEN;
+    const match = token.length === expected.length &&
+      crypto.timingSafeEqual(Buffer.from(token), Buffer.from(expected));
+    if (!match) return res.status(404).end();
+
+    const { rows: dupes } = await pool.query(`
+      SELECT a.id, a.role, a.name, a.created_at FROM users a
+      JOIN users b ON a.role = b.role AND a.name = b.name AND a.id > b.id
+      ORDER BY a.id
+    `);
+    if (req.query.apply !== '1') {
+      return res.json({ dryRun: true, wouldDelete: dupes });
+    }
+    const { rows: deleted } = await pool.query(`
+      DELETE FROM users a USING users b
+      WHERE a.role = b.role AND a.name = b.name AND a.id > b.id
+      RETURNING a.id, a.role, a.name
+    `);
+    res.json({ dryRun: false, deleted });
+  }));
+}
+
+// API-only 404 — the frontend is a separate service now (static-server.js);
+// this service no longer serves dist/ or the SPA fallback.
+app.use((req, res) => {
+  res.status(404).json({ error: `no route for ${req.method} ${req.path}` });
+});
 
 // Central error handler — catches anything ah() forwarded via next(err).
 app.use((err, _req, res, _next) => {

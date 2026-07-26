@@ -12,6 +12,7 @@
 // sectioned-mark progress pills, labelled in Aishat's voice.
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { apiUrl } from '../../lib/api-base';
 import {
   flowQuestions,
   extractIndexedFields,
@@ -150,7 +151,7 @@ export const IntakeFlow = () => {
     };
     try {
       const indexed = extractIndexedFields(draft.answers);
-      const res = await fetch('/api/intake', {
+      const res = await fetch(apiUrl('/api/intake'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
