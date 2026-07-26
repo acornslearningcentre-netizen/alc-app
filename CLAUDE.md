@@ -58,7 +58,7 @@ Production / demo Railway service ships with `VITE_SHOW_V1=false` so the client 
 
 ### `VITE_API_BASE_URL`
 
-Build-time origin of the backend API, e.g. `https://alc-app-production.up.railway.app` (no trailing slash). Required now that frontend and backend are separate Railway services — API calls can't assume same-origin `/api/...` anymore. See [`frontend/src/lib/api-base.ts`](frontend/src/lib/api-base.ts) (`apiUrl()` helper) — always call the API through it, never `fetch('/api/...')` directly.
+Build-time origin of the backend API: `https://alc-app-api.up.railway.app` (no trailing slash). Required now that frontend and backend are separate Railway services — API calls can't assume same-origin `/api/...` anymore. See [`frontend/src/lib/api-base.ts`](frontend/src/lib/api-base.ts) (`apiUrl()` helper) — always call the API through it, never `fetch('/api/...')` directly.
 
 Files for v2:
 - `frontend/src/styles/v2/tokens.css` — Watercolor Glass tokens
@@ -139,12 +139,12 @@ Three services in one Railway project (`alc-app`), all sharing the same repo/bra
 
 | Service | Root Directory | Build | Start | URL |
 |---|---|---|---|---|
-| **alc-app-backend** (renamed from `alc-app` 2026-07-26) | `backend` | `npm ci` | `npm start` (`node server.js`) | `https://alc-app-production.up.railway.app` |
+| **alc-app-backend** (renamed from `alc-app` 2026-07-26) | `backend` | `npm ci` | `npm start` (`node server.js`) | `https://alc-app-api.up.railway.app` |
 | **alc-app-frontend** | `frontend` | `npm run build` (Nixpacks runs `npm ci` first, automatically) | `npm start` (`node static-server.js`) | `https://alc-app-frontend-production.up.railway.app` |
 | **Postgres** | — (managed plugin) | — | — | internal only (`DATABASE_URL`) |
 
-- **The service is named `alc-app-backend` but its domain is still `alc-app-production.up.railway.app`** — renaming a Railway service does not rename its domain. Use the service name for `railway` CLI commands, the domain for URLs.
-- **`https://alc-app.up.railway.app` (no "-production") is stale/orphaned** — it doesn't appear in this project's domain records at all (verified via the GraphQL API 2026-07-26) but still resolves and serves old cached frontend HTML. Don't treat it as a real endpoint; if it needs killing, that's a dashboard-level domain release, not something the API surfaces.
+- Both the service name and its domain now read as "backend"/"api" (renamed 2026-07-26 via the Railway GraphQL API — `serviceDomainUpdate`, not achievable through `railway domain` alone since that only generates a fresh domain when none exists). Two older URLs are dead: `alc-app-production.up.railway.app` (the original combined-service domain, replaced) and `alc-app.up.railway.app` (a stale orphaned domain from even earlier, never actually pointed at this service per the domain records — don't treat either as a real endpoint).
+- **Changing the backend's domain requires updating `VITE_API_BASE_URL` on alc-app-frontend and redeploying it** — the URL is baked into the frontend bundle at build time, so the old URL keeps working from the frontend's point of view until that rebuild happens. Don't rename the backend domain without immediately following up with a frontend redeploy.
 - **Don't put `npm ci` in a custom `buildCommand`** — Nixpacks already runs it as a separate install phase; doing it again causes an `EBUSY` file-lock error on `node_modules/.vite`. `buildCommand` should be build-only.
 - Both app services **are connected to GitHub and auto-deploy on push to `main`** (confirmed 2026-06-28, still true after the 2026-07-26 service split — `railway status` shows a live `repo:` link and deploys firing on push per service). Don't assume a push alone is silent.
 - `NPM_CONFIG_PRODUCTION=false` is set on **alc-app-frontend** alongside `NODE_ENV=production`. **Required** — without it, `npm ci` skips `devDependencies` (including `typescript`/`vite`) under `NODE_ENV=production` and the build fails with `tsc: not found`. Not needed on the backend (no devDependencies, no build step).
