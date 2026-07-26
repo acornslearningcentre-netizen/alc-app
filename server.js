@@ -10,7 +10,6 @@ import express from 'express';
 import pg from 'pg';
 import path from 'node:path';
 import crypto from 'node:crypto';
-import fsSync from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 const { Pool } = pg;
@@ -785,40 +784,6 @@ app.delete('/api/observations/:id', ah(async (req, res) => {
   await pool.query('DELETE FROM observations WHERE id = $1', [id]);
   res.status(204).end();
 }));
-
-// TEMPORARY — one-time export of the pre-Postgres SQLite file for data
-// migration. Guarded by a secret token; remove this route once the
-// migration is done (see MIGRATE_EXPORT_TOKEN in Railway variables).
-if (process.env.MIGRATE_EXPORT_TOKEN) {
-  const checkToken = (req, res) => {
-    const token = trim(req.query.token);
-    const expected = process.env.MIGRATE_EXPORT_TOKEN;
-    const match = token.length === expected.length &&
-      crypto.timingSafeEqual(Buffer.from(token), Buffer.from(expected));
-    if (!match) { res.status(404).end(); return false; }
-    return true;
-  };
-  const ALLOWED_FILES = new Set(['review.db', 'review.db-wal', 'review.db-shm']);
-
-  app.get('/api/_migrate/ls', (req, res) => {
-    if (!checkToken(req, res)) return;
-    const dir = process.env.DATA_DIR || '/data';
-    const entries = fsSync.readdirSync(dir).map((name) => {
-      const stat = fsSync.statSync(path.join(dir, name));
-      return { name, sizeBytes: stat.size };
-    });
-    res.json(entries);
-  });
-
-  app.get('/api/_migrate/export-sqlite', (req, res) => {
-    if (!checkToken(req, res)) return;
-    const file = ALLOWED_FILES.has(req.query.file) ? req.query.file : 'review.db';
-    const filePath = path.join(process.env.DATA_DIR || '/data', file);
-    res.download(filePath, file, (err) => {
-      if (err && !res.headersSent) res.status(404).json({ error: 'file not found' });
-    });
-  });
-}
 
 app.get('/api/health', ah(async (_req, res) => {
   await pool.query('SELECT 1');
