@@ -1,6 +1,6 @@
 # Media Upload & Real Email Delivery
 
-**Jira:** [SCRUM-15](https://acornslearningcentre.atlassian.net/browse/SCRUM-15) · Epic [SCRUM-1](https://acornslearningcentre.atlassian.net/browse/SCRUM-1)
+**Jira:** Epic [SCRUM-85](https://acornslearningcentre.atlassian.net/browse/SCRUM-85)
 
 Let staff actually upload photos/videos/voice recordings, and make 'send report' really email the parent.
 

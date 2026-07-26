@@ -1,6 +1,6 @@
 # Real Login & Accounts — API
 
-**Jira:** [SCRUM-2](https://acornslearningcentre.atlassian.net/browse/SCRUM-2) · Epic [SCRUM-1](https://acornslearningcentre.atlassian.net/browse/SCRUM-1)
+**Jira:** Epic [SCRUM-16](https://acornslearningcentre.atlassian.net/browse/SCRUM-16)
 
 Replace the fake, browser-only login with real accounts checked on the server.
 

@@ -1,6 +1,6 @@
 # AI-Drafted Assessment Reports for New Families
 
-**Jira:** [SCRUM-14](https://acornslearningcentre.atlassian.net/browse/SCRUM-14) · Epic [SCRUM-1](https://acornslearningcentre.atlassian.net/browse/SCRUM-1)
+**Jira:** Epic [SCRUM-82](https://acornslearningcentre.atlassian.net/browse/SCRUM-82)
 
 Auto-generate a first-draft report from a family's intake answers and assessment observations.
 

@@ -1,6 +1,6 @@
 # Today's Daily Flow / Schedule — API
 
-**Jira:** [SCRUM-4](https://acornslearningcentre.atlassian.net/browse/SCRUM-4) · Epic [SCRUM-1](https://acornslearningcentre.atlassian.net/browse/SCRUM-1)
+**Jira:** Epic [SCRUM-30](https://acornslearningcentre.atlassian.net/browse/SCRUM-30)
 
 Make the classroom's daily timeline real and editable instead of a fixed sample.
 

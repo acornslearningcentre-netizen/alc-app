@@ -1,6 +1,6 @@
 # AI Suggestions & Next Steps
 
-**Jira:** [SCRUM-6](https://acornslearningcentre.atlassian.net/browse/SCRUM-6) · Epic [SCRUM-1](https://acornslearningcentre.atlassian.net/browse/SCRUM-1)
+**Jira:** Epic [SCRUM-39](https://acornslearningcentre.atlassian.net/browse/SCRUM-39)
 
 Turn the AI brief and suggestion counters into real, actionable, trackable recommendations.
 

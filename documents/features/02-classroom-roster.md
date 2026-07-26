@@ -1,6 +1,6 @@
 # Classroom Roster — Children, Parents & Teachers
 
-**Jira:** [SCRUM-3](https://acornslearningcentre.atlassian.net/browse/SCRUM-3) · Epic [SCRUM-1](https://acornslearningcentre.atlassian.net/browse/SCRUM-1)
+**Jira:** Epic [SCRUM-22](https://acornslearningcentre.atlassian.net/browse/SCRUM-22)
 
 Give the app a real, editable list of children, their parents/carers, and teachers.
 

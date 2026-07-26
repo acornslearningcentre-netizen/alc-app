@@ -1,6 +1,6 @@
 # School Leader Analytics Dashboards
 
-**Jira:** [SCRUM-13](https://acornslearningcentre.atlassian.net/browse/SCRUM-13) · Epic [SCRUM-1](https://acornslearningcentre.atlassian.net/browse/SCRUM-1)
+**Jira:** Epic [SCRUM-76](https://acornslearningcentre.atlassian.net/browse/SCRUM-76)
 
 Base every leader-facing number and chart on real school data instead of fixed demo figures.
 

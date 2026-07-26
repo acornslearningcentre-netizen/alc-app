@@ -1,6 +1,6 @@
 # Student Self-Service Progress
 
-**Jira:** [SCRUM-12](https://acornslearningcentre.atlassian.net/browse/SCRUM-12) · Epic [SCRUM-1](https://acornslearningcentre.atlassian.net/browse/SCRUM-1)
+**Jira:** Epic [SCRUM-68](https://acornslearningcentre.atlassian.net/browse/SCRUM-68)
 
 Save the Garden, Growing checklist, and Try Today choices so a child's progress survives beyond the current browser tab.
 

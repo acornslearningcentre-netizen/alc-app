@@ -1,6 +1,6 @@
 # Lesson Planning — API
 
-**Jira:** [SCRUM-7](https://acornslearningcentre.atlassian.net/browse/SCRUM-7) · Epic [SCRUM-1](https://acornslearningcentre.atlassian.net/browse/SCRUM-1)
+**Jira:** Epic [SCRUM-45](https://acornslearningcentre.atlassian.net/browse/SCRUM-45)
 
 Make the weekly lesson plan and each student's plan status persist for real.
 

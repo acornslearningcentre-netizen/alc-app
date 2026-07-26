@@ -1,6 +1,6 @@
 # AI Assistant Chat — API
 
-**Jira:** [SCRUM-10](https://acornslearningcentre.atlassian.net/browse/SCRUM-10) · Epic [SCRUM-1](https://acornslearningcentre.atlassian.net/browse/SCRUM-1)
+**Jira:** Epic [SCRUM-59](https://acornslearningcentre.atlassian.net/browse/SCRUM-59)
 
 Replace the canned 'Ask about [child]' answers with real, child-specific AI answers that remember the conversation.
 

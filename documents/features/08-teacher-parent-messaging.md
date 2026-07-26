@@ -1,6 +1,6 @@
 # Teacher ⇄ Parent Messaging
 
-**Jira:** [SCRUM-9](https://acornslearningcentre.atlassian.net/browse/SCRUM-9) · Epic [SCRUM-1](https://acornslearningcentre.atlassian.net/browse/SCRUM-1)
+**Jira:** Epic [SCRUM-54](https://acornslearningcentre.atlassian.net/browse/SCRUM-54)
 
 Make messages between teachers and parents actually send, arrive, and persist.
 

@@ -1,6 +1,6 @@
 # Classroom Observations for Enrolled Children
 
-**Jira:** [SCRUM-5](https://acornslearningcentre.atlassian.net/browse/SCRUM-5) · Epic [SCRUM-1](https://acornslearningcentre.atlassian.net/browse/SCRUM-1)
+**Jira:** Epic [SCRUM-35](https://acornslearningcentre.atlassian.net/browse/SCRUM-35)
 
 Let day-to-day classroom observations (not just pre-enrolment ones) save for real, with tags and mood.
 

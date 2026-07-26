@@ -11,13 +11,16 @@ The app is **not** an AI that teaches. It wraps existing learning tools (IXL, Ce
 ## Active milestone
 
 **Onboarding journey for client demo on 2026-05-10** (compressed one-week sprint).
-- Plan: [documents/features/onboarding/PLAN-onboarding-journey.md](documents/features/onboarding/PLAN-onboarding-journey.md)
-- Latest interview: [documents/features/onboarding/2026-05-03-meeting-summary.md](documents/features/onboarding/2026-05-03-meeting-summary.md)
-- Real intake form questions: [documents/features/onboarding/onboarding-form-schema.md](documents/features/onboarding/onboarding-form-schema.md)
-- Design brief: [documents/features/onboarding/onboarding-design-prompt.md](documents/features/onboarding/onboarding-design-prompt.md)
+- Plan: [documents/planning/PLAN-onboarding-journey.md](documents/planning/PLAN-onboarding-journey.md)
+- Latest interview: [documents/meetings/2026-05-03-meeting-summary.md](documents/meetings/2026-05-03-meeting-summary.md)
+- Real intake form questions: [documents/planning/onboarding-form-schema.md](documents/planning/onboarding-form-schema.md)
+- Design brief: [documents/planning/onboarding-design-prompt.md](documents/planning/onboarding-design-prompt.md)
+- Requirements: [documents/features/15-onboarding.md](documents/features/15-onboarding.md) / [documents/api/15-onboarding.md](documents/api/15-onboarding.md)
 - JIRA project: [`SCRUM` on acornslearningcentre.atlassian.net](https://acornslearningcentre.atlassian.net/jira/software/projects/SCRUM/boards/34/backlog).
 
 When working on onboarding, **start from the schema doc** above — it captures the exact question set Aishat uses today.
+
+The public intake form itself (Epic A) is done and correct. What's still missing is entirely staff-facing screens — the owner queue, assessment booking, report sign-off/send, and in-visit observation capture only exist as backend API today, with zero frontend. Tracked as Jira Epic [SCRUM-89](https://acornslearningcentre.atlassian.net/browse/SCRUM-89), scoped in [documents/features/15-onboarding.md](documents/features/15-onboarding.md).
 
 ## Stack
 
@@ -123,10 +126,29 @@ frontend/
 └── package.json                              react, vite, express (for static-server.js only)
 
 documents/
-├── api/                                        per-feature API requirement docs (endpoints + acceptance criteria)
-└── features/                                   per-feature UX requirement docs (plain-language acceptance criteria)
-    └── onboarding/                              onboarding plan, meeting notes, form schema, design brief
+├── api/                                        per-feature API requirement docs (endpoints + acceptance criteria) — see "Requirement doc standard" below
+├── features/                                   per-feature UX requirement docs (plain-language acceptance criteria)
+├── planning/                                   raw source docs (plans, schemas, design briefs) — not the standardized format
+└── meetings/                                   meeting notes
 ```
+
+## Requirement doc standard
+
+Every feature in this app (existing or planned) gets exactly two files, numbered and named identically across both folders — `documents/features/NN-slug.md` and `documents/api/NN-slug.md`. Both link to each other and to the feature's Jira Epic. Update [`documents/features/README.md`](documents/features/README.md) and [`documents/api/README.md`](documents/api/README.md) (the index tables) whenever a feature is added — they're the source of truth for numbering, don't let them drift from what's actually in each folder.
+
+**`documents/features/NN-slug.md`** (the user-facing view):
+- `# Title`, then `**Jira:** Epic [KEY](url)`, then a one-line summary.
+- `## Where things stand today` — plain description of the current gap, written for a non-technical reader (what's mocked/missing/broken, not how to fix it).
+- `## Acceptance criteria` — a markdown checklist (`- [ ]`), each item a complete, layman-readable sentence describing observable behaviour ("A parent can see...", never "the API returns..."). No jargon, no code, no endpoint names.
+- `## Related API` — a link to the matching `documents/api/NN-slug.md`.
+
+**`documents/api/NN-slug.md`** (the implementation view):
+- Same header pattern, linking back to the features file.
+- `## Endpoints` (or `## Existing endpoints...` if nothing new is needed) — a table of method/path/purpose.
+- One `###` subsection per endpoint with its own plain-language acceptance-criteria checklist (success case, validation/error case, persistence guarantee) — still no jargon in the criteria themselves, even though the surrounding doc is technical.
+- If the feature needs new database tables, include the actual `CREATE TABLE` SQL in a fenced code block, not just prose — this is also what should be pasted into the corresponding Jira ticket's "DB:" sub-task.
+
+A feature whose backend already exists (like onboarding's staff screens, #15) still gets both files — the API doc just documents which *existing* endpoints each screen must wire up to, rather than proposing new ones.
 
 ## Reviewer guide
 

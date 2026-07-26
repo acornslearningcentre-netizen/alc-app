@@ -1,6 +1,6 @@
 # Child & Class Progress Tracking — API
 
-**Jira:** [SCRUM-8](https://acornslearningcentre.atlassian.net/browse/SCRUM-8) · Epic [SCRUM-1](https://acornslearningcentre.atlassian.net/browse/SCRUM-1)
+**Jira:** Epic [SCRUM-50](https://acornslearningcentre.atlassian.net/browse/SCRUM-50)
 
 Base mastery, attendance, streak and trend on real recorded activity instead of fixed numbers.
 
