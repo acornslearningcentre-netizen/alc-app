@@ -795,35 +795,6 @@ app.get('/api/health', ah(async (_req, res) => {
   res.json({ ok: true });
 }));
 
-// TEMPORARY — one-time cleanup of duplicate demo-account rows accidentally
-// inserted by a local test run against production. Dry-run by default
-// (SELECT only); pass ?apply=1 to actually delete. Remove this route once
-// cleanup is confirmed (see ADMIN_TASK_TOKEN in Railway variables).
-if (process.env.ADMIN_TASK_TOKEN) {
-  app.get('/api/_admin/dedupe-users', ah(async (req, res) => {
-    const token = trim(req.query.token);
-    const expected = process.env.ADMIN_TASK_TOKEN;
-    const match = token.length === expected.length &&
-      crypto.timingSafeEqual(Buffer.from(token), Buffer.from(expected));
-    if (!match) return res.status(404).end();
-
-    const { rows: dupes } = await pool.query(`
-      SELECT a.id, a.role, a.name, a.created_at FROM users a
-      JOIN users b ON a.role = b.role AND a.name = b.name AND a.id > b.id
-      ORDER BY a.id
-    `);
-    if (req.query.apply !== '1') {
-      return res.json({ dryRun: true, wouldDelete: dupes });
-    }
-    const { rows: deleted } = await pool.query(`
-      DELETE FROM users a USING users b
-      WHERE a.role = b.role AND a.name = b.name AND a.id > b.id
-      RETURNING a.id, a.role, a.name
-    `);
-    res.json({ dryRun: false, deleted });
-  }));
-}
-
 // API-only 404 — the frontend is a separate service now (static-server.js);
 // this service no longer serves dist/ or the SPA fallback.
 app.use((req, res) => {
