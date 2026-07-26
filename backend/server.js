@@ -8,7 +8,14 @@
 import express from 'express';
 import cors from 'cors';
 import pg from 'pg';
-import crypto from 'node:crypto';
+import { hashPassword, verifyPassword, hashPasscode, genToken, publicUser } from './lib/auth.js';
+import { createAttemptThrottle } from './lib/throttle.js';
+import {
+  trim, optional, cleanPriority, isEmail, toBool,
+  PROSPECT_STATUSES, ASSESSMENT_STATUSES, OBSERVATION_KINDS,
+  cleanProspectStatus, cleanAssessmentStatus, cleanObservationKind,
+  parsePositiveIntId, parseCorsOrigins,
+} from './lib/validators.js';
 
 const { Pool } = pg;
 const PORT = Number(process.env.PORT) || 3000;
@@ -183,37 +190,13 @@ async function migrate() {
 // Passwords: per-user random salt + scrypt (verified after an email lookup).
 // Passcodes: keyed HMAC so a family/child can be found by passcode alone,
 // the way the login screen already works — no separate username field.
+// Pure hashing/token logic lives in ./lib/auth.js (unit-tested there).
 const PASSCODE_PEPPER = process.env.PASSCODE_PEPPER;
 if (!PASSCODE_PEPPER) {
   console.warn('PASSCODE_PEPPER is not set — using an insecure dev-only default. Set it in Railway for production.');
 }
 const passcodePepper = PASSCODE_PEPPER || 'dev-only-insecure-pepper-change-me';
 const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
-
-const hashPassword = (password) => {
-  const salt = crypto.randomBytes(16).toString('hex');
-  const hash = crypto.scryptSync(password, salt, 64).toString('hex');
-  return `${salt}:${hash}`;
-};
-const verifyPassword = (password, stored) => {
-  if (!stored) return false;
-  const [salt, hash] = stored.split(':');
-  if (!salt || !hash) return false;
-  const candidate = crypto.scryptSync(password, salt, 64);
-  const expected = Buffer.from(hash, 'hex');
-  return candidate.length === expected.length && crypto.timingSafeEqual(candidate, expected);
-};
-const hashPasscode = (passcode) => crypto.createHmac('sha256', passcodePepper).update(passcode).digest('hex');
-const genToken = () => crypto.randomBytes(32).toString('hex');
-
-const publicUser = (u) => u && ({
-  id: u.id,
-  role: u.role,
-  name: u.name,
-  email: u.email ?? null,
-  childId: u.child_id ?? null,
-  teacherId: u.teacher_id ?? null,
-});
 
 const createSession = async (userId) => {
   const token = genToken();
@@ -224,26 +207,8 @@ const createSession = async (userId) => {
 
 // Very small in-memory throttle: flags unusually many failed attempts from
 // the same IP without permanently locking a family out of a shared device.
-const failedAttempts = new Map(); // ip -> { count, windowStart }
-const FAILED_ATTEMPT_WINDOW_MS = 15 * 60 * 1000;
-const FAILED_ATTEMPT_LIMIT = 10;
-const tooManyFailedAttempts = (ip) => {
-  const entry = failedAttempts.get(ip);
-  if (!entry) return false;
-  if (Date.now() - entry.windowStart > FAILED_ATTEMPT_WINDOW_MS) {
-    failedAttempts.delete(ip);
-    return false;
-  }
-  return entry.count >= FAILED_ATTEMPT_LIMIT;
-};
-const recordFailedAttempt = (ip) => {
-  const entry = failedAttempts.get(ip);
-  if (!entry || Date.now() - entry.windowStart > FAILED_ATTEMPT_WINDOW_MS) {
-    failedAttempts.set(ip, { count: 1, windowStart: Date.now() });
-  } else {
-    entry.count += 1;
-  }
-};
+// Factory lives in ./lib/throttle.js (unit-tested there).
+const { tooManyFailedAttempts, recordFailedAttempt } = createAttemptThrottle();
 
 const requireAuth = async (req, res, next) => {
   const header = req.headers.authorization ?? '';
@@ -295,7 +260,7 @@ async function seedDemoAccounts() {
   await withTransaction(async (client) => {
     for (const u of AUTH_SEED) {
       const email = u.email ? u.email.toLowerCase() : null;
-      const passcodeHash = u.passcode ? hashPasscode(u.passcode) : null;
+      const passcodeHash = u.passcode ? hashPasscode(u.passcode, passcodePepper) : null;
       const { rows: [exists] } = email
         ? await client.query('SELECT 1 FROM users WHERE email = $1', [email])
         : await client.query('SELECT 1 FROM users WHERE role = $1 AND passcode_hash = $2', [u.role, passcodeHash]);
@@ -318,20 +283,15 @@ app.set('trust proxy', 1); // Railway sits behind a proxy — needed for accurat
 // "https://alc-app-frontend.up.railway.app". Falls back to reflecting the
 // request origin (permissive) if unset, so local dev keeps working without
 // extra config — set it explicitly in Railway once the frontend domain is known.
-const corsOrigins = (process.env.CORS_ORIGIN || '').split(',').map((s) => s.trim()).filter(Boolean);
+const corsOrigins = parseCorsOrigins(process.env.CORS_ORIGIN);
 app.use(cors({ origin: corsOrigins.length > 0 ? corsOrigins : true }));
 
 app.use(express.json({ limit: '64kb' }));
 
 // ── API ──────────────────────────────────────────────────────────────────────
-const trim = (v) => (typeof v === 'string' ? v.trim() : '');
-const optional = (v) => (trim(v) || null);
-const PRIORITIES = new Set(['important', 'nice', 'v2']);
-const cleanPriority = (v) => (PRIORITIES.has(trim(v)) ? trim(v) : null);
-
 const idParam = (req, res) => {
-  const id = Number(req.params.id);
-  if (!Number.isInteger(id) || id <= 0) {
+  const id = parsePositiveIntId(req.params.id);
+  if (id === null) {
     res.status(400).json({ error: 'invalid id' });
     return null;
   }
@@ -446,7 +406,6 @@ app.delete('/api/review/requests/:id', ah(async (req, res) => {
 }));
 
 // ── /api/auth (SCRUM-16) ────────────────────────────────────────────────────
-const authEmailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const clientIp = (req) => req.ip ?? req.socket?.remoteAddress ?? 'unknown';
 
 app.post('/api/auth/login', ah(async (req, res) => {
@@ -455,7 +414,7 @@ app.post('/api/auth/login', ah(async (req, res) => {
     return res.status(429).json({ error: 'too many failed attempts — please wait a few minutes and try again' });
   }
   const { email, password } = req.body ?? {};
-  if (!authEmailRe.test(trim(email)) || !trim(password)) {
+  if (!isEmail(email) || !trim(password)) {
     return res.status(400).json({ error: 'email and password are required' });
   }
   const { rows: [user] } = await pool.query(
@@ -485,7 +444,7 @@ app.post('/api/auth/passcode', ah(async (req, res) => {
   }
   const { rows: [user] } = await pool.query(
     'SELECT * FROM users WHERE role = $1 AND passcode_hash = $2',
-    [r, hashPasscode(trim(passcode))],
+    [r, hashPasscode(trim(passcode), passcodePepper)],
   );
   if (!user) {
     recordFailedAttempt(ip);
@@ -508,20 +467,6 @@ app.get('/api/auth/me', requireAuth, ah(async (req, res) => {
 // Surface for the onboarding journey (intake form, owner queue, assessments,
 // observations). Tables are defined in migrate() at the top of this file
 // (Stories B1–B4). Email send + media upload land in later epics.
-
-const PROSPECT_STATUSES   = new Set(['prospect','booked','assessed','enrolled','declined']);
-const ASSESSMENT_STATUSES = new Set(['scheduled','in_progress','done']);
-const OBSERVATION_KINDS   = new Set(['image','video','voice','text']);
-
-const isEmail = (s) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trim(s));
-const toBool = (v) => {
-  if (v === true || v === 1) return true;
-  if (typeof v === 'string' && /^(yes|true|1)$/i.test(v.trim())) return true;
-  return false;
-};
-const cleanProspectStatus   = (v) => (PROSPECT_STATUSES.has(trim(v))   ? trim(v) : null);
-const cleanAssessmentStatus = (v) => (ASSESSMENT_STATUSES.has(trim(v)) ? trim(v) : null);
-const cleanObservationKind  = (v) => (OBSERVATION_KINDS.has(trim(v))   ? trim(v) : null);
 
 const getProspect = async (id) => {
   const { rows: [row] } = await pool.query('SELECT * FROM prospects WHERE id = $1', [id]);

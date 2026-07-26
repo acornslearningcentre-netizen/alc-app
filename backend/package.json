@@ -8,11 +8,15 @@
   },
   "scripts": {
     "dev": "node server.js",
-    "start": "node server.js"
+    "start": "node server.js",
+    "test": "vitest run"
   },
   "dependencies": {
     "cors": "^2.8.6",
     "express": "^4.22.1",
     "pg": "^8.22.0"
+  },
+  "devDependencies": {
+    "vitest": "^2.1.9"
   }
 }
