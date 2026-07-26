@@ -44,7 +44,7 @@ The app is **two independent projects in one repo**, each with its own `package.
 
 ## Feature flags
 
-Build-time only — read via `import.meta.env.VITE_*` at `vite build` time, so changing a flag means redeploying (`railway up --service alc-app-frontend -c`).
+Build-time only — read via `import.meta.env.VITE_*` at `vite build` time, so changing a flag means redeploying (`railway up --service alc-app-frontend -c`), not just restarting.
 
 ### `VITE_SHOW_V1`
 
@@ -139,21 +139,23 @@ Three services in one Railway project (`alc-app`), all sharing the same repo/bra
 
 | Service | Root Directory | Build | Start | URL |
 |---|---|---|---|---|
-| **alc-app** (backend/API) | `backend` | `npm ci` | `npm start` (`node server.js`) | `https://alc-app-production.up.railway.app` (also aliased at `https://alc-app.up.railway.app`) |
+| **alc-app-backend** (renamed from `alc-app` 2026-07-26) | `backend` | `npm ci` | `npm start` (`node server.js`) | `https://alc-app-production.up.railway.app` |
 | **alc-app-frontend** | `frontend` | `npm run build` (Nixpacks runs `npm ci` first, automatically) | `npm start` (`node static-server.js`) | `https://alc-app-frontend-production.up.railway.app` |
 | **Postgres** | — (managed plugin) | — | — | internal only (`DATABASE_URL`) |
 
+- **The service is named `alc-app-backend` but its domain is still `alc-app-production.up.railway.app`** — renaming a Railway service does not rename its domain. Use the service name for `railway` CLI commands, the domain for URLs.
+- **`https://alc-app.up.railway.app` (no "-production") is stale/orphaned** — it doesn't appear in this project's domain records at all (verified via the GraphQL API 2026-07-26) but still resolves and serves old cached frontend HTML. Don't treat it as a real endpoint; if it needs killing, that's a dashboard-level domain release, not something the API surfaces.
 - **Don't put `npm ci` in a custom `buildCommand`** — Nixpacks already runs it as a separate install phase; doing it again causes an `EBUSY` file-lock error on `node_modules/.vite`. `buildCommand` should be build-only.
 - Both app services **are connected to GitHub and auto-deploy on push to `main`** (confirmed 2026-06-28, still true after the 2026-07-26 service split — `railway status` shows a live `repo:` link and deploys firing on push per service). Don't assume a push alone is silent.
 - `NPM_CONFIG_PRODUCTION=false` is set on **alc-app-frontend** alongside `NODE_ENV=production`. **Required** — without it, `npm ci` skips `devDependencies` (including `typescript`/`vite`) under `NODE_ENV=production` and the build fails with `tsc: not found`. Not needed on the backend (no devDependencies, no build step).
-- `CORS_ORIGIN` on **alc-app** must list the frontend's live domain(s), comma-separated — the frontend calls the API cross-origin now. Falls back to reflecting any origin (permissive) if unset, so don't leave it unset in production.
+- `CORS_ORIGIN` on **alc-app-backend** must list the frontend's live domain(s), comma-separated — the frontend calls the API cross-origin now. Falls back to reflecting any origin (permissive) if unset, so don't leave it unset in production.
 - `VITE_API_BASE_URL` on **alc-app-frontend** must point at the backend's URL — it's baked in at build time, so changing it means a rebuild, not just a restart.
-- `DATABASE_URL` on **alc-app** references the Postgres plugin (`${{Postgres.DATABASE_URL}}`) — set once via `railway variables`, don't hardcode a connection string.
+- `DATABASE_URL` on **alc-app-backend** references the Postgres plugin (`${{Postgres.DATABASE_URL}}`) — set once via `railway variables`, don't hardcode a connection string.
 - To force/re-trigger a deploy manually:
   ```bash
-  railway link --project alc-app          # interactive — answer prompts once, only needed the first time
-  railway up --service alc-app -c          # backend — streams build logs, exits when done
-  railway up --service alc-app-frontend -c # frontend
+  railway link --project alc-app                    # interactive — answer prompts once, only needed the first time
+  railway up --service alc-app-backend -c            # backend — streams build logs, exits when done
+  railway up --service alc-app-frontend -c           # frontend
   ```
 - Health checks: `/api/health` (backend, checks Postgres connectivity too), `/health` (frontend static server).
 - DB: **Postgres** (Railway managed plugin), not SQLite — migrated 2026-07-26. `backend/server.js` runs its own schema migration (`CREATE TABLE IF NOT EXISTS ...`) on boot; no separate migration tool.
@@ -163,7 +165,7 @@ Three services in one Railway project (`alc-app`), all sharing the same repo/bra
 When the user says **"deploy code"**, do the following without asking for confirmation first:
 1. Commit the current changes to `main` (with a normal descriptive commit message).
 2. Push `main` to the GitHub remote.
-3. Confirm the change actually deployed to Railway: check `railway status` for **both** `alc-app` and `alc-app-frontend` (a frontend-only change won't show up on the backend's deployment, and vice versa), and if either doesn't show up or fails, run `railway up --service <name> -c` for that service and watch the build/deploy logs until it succeeds (or report the failure with the relevant log lines).
+3. Confirm the change actually deployed to Railway: check `railway status` for **both** `alc-app-backend` and `alc-app-frontend` (a frontend-only change won't show up on the backend's deployment, and vice versa), and if either doesn't show up or fails, run `railway up --service <name> -c` for that service and watch the build/deploy logs until it succeeds (or report the failure with the relevant log lines).
 
 ## Working agreements
 
