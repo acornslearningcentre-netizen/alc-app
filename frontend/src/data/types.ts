@@ -82,11 +82,34 @@ export interface StudentPasscodeEntry {
   childName: string;
 }
 
+/** Status of an AI-drafted lesson plan for one student */
+export type PlanStatus = 'accepted' | 'edited' | 'pending';
+
+/** One student's slice of a lesson plan */
+export interface StudentLessonPlan {
+  childId: string;
+  status: PlanStatus;
+  activity: string;
+  note?: string;
+}
+
+/** A single planned lesson, with a per-student breakdown */
+export interface LessonPlan {
+  id: string;
+  day: 'Mon' | 'Tue' | 'Wed' | 'Thu' | 'Fri';
+  time: string;
+  subject: string;
+  title: string;
+  summary: string;
+  students: StudentLessonPlan[];
+}
+
 /** Root data shape */
 export interface ALCData {
   children: Child[];
   observations: Observation[];
   nextSteps: Record<string, NextStep[]>;
+  lessonPlans: LessonPlan[];
   parentPasscodes: Record<string, PasscodeEntry>;
   studentPasscodes: Record<string, StudentPasscodeEntry>;
 }

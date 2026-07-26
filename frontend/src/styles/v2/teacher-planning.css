@@ -1,0 +1,123 @@
+/* Acorns v2 "Watercolor Glass" — Teacher Planning. */
+
+body.v2 .v2-plan-list { padding: 8px 24px; }
+
+/* ── One lesson block — header row + nested student table ───────────── */
+
+body.v2 .v2-plan-lesson {
+  padding: 16px 0;
+  border-top: 1px solid var(--v2-hairline);
+}
+body.v2 .v2-plan-lesson:first-child { border-top: 0; }
+
+body.v2 .v2-plan-lesson-head {
+  display: grid;
+  grid-template-columns: 40px 56px 1fr auto;
+  align-items: center;
+  gap: 16px;
+  width: 100%;
+}
+
+body.v2 .v2-plan-row-day {
+  font-family: var(--v2-mono);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: var(--v2-moss);
+}
+
+body.v2 .v2-plan-row-time {
+  font-size: 11.5px;
+  color: var(--v2-pencil);
+}
+
+body.v2 .v2-plan-row-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+body.v2 .v2-plan-row-title {
+  font-family: var(--v2-display);
+  font-weight: 700;
+  font-size: 14.5px;
+  letter-spacing: -0.005em;
+  color: var(--v2-ink);
+}
+body.v2 .v2-plan-row-sub {
+  font-size: 12.5px;
+  color: var(--v2-mist);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+body.v2 .v2-plan-row-chips {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+/* ── Per-student lines — compact table under each lesson ─────────────── */
+
+body.v2 .v2-plan-lesson-students {
+  margin-top: 12px;
+  margin-left: 96px;
+  display: flex;
+  flex-direction: column;
+}
+
+body.v2 .v2-plan-student-line {
+  display: grid;
+  grid-template-columns: 140px 1fr auto;
+  align-items: center;
+  gap: 14px;
+  padding: 8px 0;
+  border-top: 1px dashed var(--v2-hairline);
+}
+body.v2 .v2-plan-student-line:first-child { border-top: 0; }
+
+body.v2 .v2-plan-student-name {
+  background: none;
+  border: 0;
+  padding: 0;
+  text-align: left;
+  font-family: var(--v2-display);
+  font-weight: 700;
+  font-size: 13.5px;
+  letter-spacing: -0.005em;
+  color: var(--v2-ink);
+  cursor: pointer;
+  border-bottom: 1px dashed transparent;
+  justify-self: start;
+}
+body.v2 .v2-plan-student-name:hover {
+  color: var(--v2-moss);
+  border-bottom-color: var(--v2-moss);
+}
+
+body.v2 .v2-plan-student-activity {
+  font-size: 13px;
+  color: var(--v2-mist);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+@media (max-width: 760px) {
+  body.v2 .v2-plan-lesson-head {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+  body.v2 .v2-plan-row-day,
+  body.v2 .v2-plan-row-time { display: inline; margin-right: 8px; }
+  body.v2 .v2-plan-row-chips { justify-content: flex-start; }
+
+  body.v2 .v2-plan-lesson-students { margin-left: 0; }
+  body.v2 .v2-plan-student-line {
+    grid-template-columns: 1fr;
+    gap: 2px;
+  }
+}

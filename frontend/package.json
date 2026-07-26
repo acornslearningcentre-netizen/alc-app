@@ -1,5 +1,5 @@
 {
-  "name": "alc-app",
+  "name": "alc-app-frontend",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -8,18 +8,14 @@
   },
   "scripts": {
     "dev": "vite",
-    "dev:server": "node server.js",
     "build": "tsc -b && vite build",
-    "start": "node server.js",
-    "start:frontend": "node static-server.js",
+    "start": "node static-server.js",
     "lint": "eslint .",
     "preview": "vite preview"
   },
   "dependencies": {
     "clsx": "^2.1.1",
-    "cors": "^2.8.6",
     "express": "^4.22.1",
-    "pg": "^8.22.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-router-dom": "^7.14.1",

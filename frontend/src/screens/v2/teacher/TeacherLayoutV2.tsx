@@ -5,7 +5,7 @@ import { TeacherTodayV2 } from './TeacherTodayV2';
 import { TeacherChildren } from '../../teacher/TeacherChildren';
 import { TeacherObserve } from '../../teacher/TeacherObserve';
 import { TeacherProfile } from '../../teacher/TeacherProfile';
-import { TeacherPlanning } from '../../teacher/TeacherPlanning';
+import { TeacherPlanningV2 } from './TeacherPlanningV2';
 import { TeacherProgress } from '../../teacher/TeacherProgress';
 import { TeacherAssistant } from '../../teacher/TeacherAssistant';
 import { TeacherMessages } from '../../teacher/TeacherMessages';
@@ -91,7 +91,7 @@ export const TeacherLayoutV2: React.FC = () => {
         {view === 'profile' && profileId && (
           <div className="v2-content"><TeacherProfile childId={profileId} onBack={() => { setView('children'); setProfileId(null); }} onMessageParent={(g) => { setPendingGuardian(g); setView('messages'); }}/></div>
         )}
-        {view === 'plan' && <div className="v2-content"><TeacherPlanning/></div>}
+        {view === 'plan' && <TeacherPlanningV2 onChild={openChild}/>}
         {view === 'progress' && <div className="v2-content"><TeacherProgress/></div>}
         {view === 'assistant' && <div className="v2-content"><TeacherAssistant/></div>}
         {view === 'messages' && <div className="v2-content"><TeacherMessages initialGuardianName={pendingGuardian}/></div>}
