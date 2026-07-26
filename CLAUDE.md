@@ -173,12 +173,18 @@ CI runs both test suites via GitHub Actions on every push/PR to `main` — see [
 
 When picking up a piece of work that starts from a Jira ticket (e.g. "pick up SCRUM-17", "work on the next story"):
 
-1. **Create a new branch first** — never implement ticket work directly on `main`. Name it `<ticket-key>-<short-slug>` in lowercase, e.g. `scrum-17-login-accounts-db`.
-2. Do the implementation work on that branch, committing normally. Push the branch (not `main`) as work progresses.
-3. Open a PR from the branch into `main` once the work is ready to be looked at — this makes CI run on the PR (a pre-merge signal), and gives the user something to review/pull down for manual testing.
-4. **Wait for the user to say "test complete" (or equivalent) before merging to `main`.** This is a manual QA gate independent of CI — don't merge on CI passing alone, and don't merge speculatively before being told testing is done.
-5. Once told testing is complete: merge the PR into `main`. Because both app services auto-deploy on push to `main` (see *Deployment — Railway* above), merging **is** the deploy trigger — there's no separate deploy step.
-6. Confirm CI is green on the resulting `main` commit and that both Railway services redeployed successfully (`railway status` for `alc-app-backend` and `alc-app-frontend`, or the "Deploy code" verification steps above). If CI fails post-merge despite passing on the PR (flaky test, environment drift), flag it — don't treat the merge as done until it's green.
+1. **Create a new branch named exactly the ticket key** — e.g. `SCRUM-17`, nothing appended. Never implement ticket work directly on `main`.
+2. **Transition the ticket to "In Progress" in Jira** (`POST /rest/api/3/issue/{key}/transitions`, transition id `21` — see *JIRA & secrets* for creds) as soon as the branch is created, before doing the implementation work.
+3. Do the implementation work on that branch, committing normally — **include the ticket key in commit messages** (e.g. `SCRUM-17: add users/sessions schema`), not just the branch name. Push the branch (not `main`) as work progresses.
+4. Open a PR from the branch into `main` once the work is ready to be looked at, **with the ticket key in the PR title**. This makes CI run on the PR (a pre-merge signal), gives the user something to review/pull down for manual testing, and — combined with the ticket-key branch name and commits — is what makes the work show up in the ticket's Jira "Development" panel (branch/commits/PR), assuming the GitHub-for-Jira app is connected (see below).
+5. **Wait for the user to say "test complete" (or equivalent) before merging to `main`.** This is a manual QA gate independent of CI — don't merge on CI passing alone, and don't merge speculatively before being told testing is done.
+6. Once told testing is complete: merge the PR into `main`. Because both app services auto-deploy on push to `main` (see *Deployment — Railway* above), merging **is** the deploy trigger — there's no separate deploy step.
+7. Confirm CI is green on the resulting `main` commit and that both Railway services redeployed successfully (`railway status` for `alc-app-backend` and `alc-app-frontend`, or the "Deploy code" verification steps above). If CI fails post-merge despite passing on the PR (flaky test, environment drift), flag it — don't treat the merge as done until it's green.
+8. **Transition the ticket to "Done" in Jira** (transition id `41`) once the deploy is confirmed working. Don't mark it Done before that confirmation, even if the merge itself succeeded.
+
+### Jira Development panel — one-time setup needed from you
+
+Ticket branches/commits/PRs only show up automatically in a Jira ticket's "Development" panel if the **GitHub for Jira** app is connected — this is a one-time Jira-admin action that has to happen in the browser (install from the Atlassian Marketplace on `acornslearningcentre.atlassian.net`, then authorize it against the `acornslearningcentre-netizen` GitHub org). It can't be done via the REST API or CLI, so it isn't something I can set up myself. Once it's connected, everything above (ticket-key branch names, commit messages, PR titles) will make the Development panel populate automatically — no other change needed on my side.
 
 This is separate from the **"Deploy code"** instruction above, which is for direct, non-ticket-driven pushes straight to `main` (hotfixes, config tweaks) — that one skips the branch/PR/testing-gate ceremony entirely, by design, since the user is asking for something immediate.
 
