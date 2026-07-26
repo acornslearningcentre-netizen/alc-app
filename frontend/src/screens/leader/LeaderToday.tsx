@@ -1,5 +1,5 @@
 import React from 'react';
-import { Icon, Sparkline } from '../../components/ui';
+import { Icon, Sparkline, type IconName } from '../../components/ui';
 import { ALC_DATA } from '../../data/seed';
 
 export const LeaderToday: React.FC = () => {
@@ -62,7 +62,7 @@ export const LeaderToday: React.FC = () => {
             ].map((p, i) => (
               <div key={i} className={`row tone-${p.tone}`} style={{ gap: 14, padding: '14px 0', borderBottom: i < 2 ? '1px dashed var(--line)' : 'none', alignItems: 'flex-start' }}>
                 <div style={{ width: 32, height: 32, borderRadius: 8, background: 'var(--tone-soft)', color: 'var(--tone-ink)', display: 'grid', placeItems: 'center', flexShrink: 0 }}>
-                  <Icon name={p.icon as any} size={14}/>
+                  <Icon name={p.icon as IconName} size={14}/>
                 </div>
                 <div>
                   <div style={{ fontWeight: 700, fontSize: 13.5, marginBottom: 3 }}>{p.title}</div>

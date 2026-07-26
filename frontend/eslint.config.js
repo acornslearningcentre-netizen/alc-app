@@ -23,6 +23,13 @@ export default tseslint.config(
         'warn',
         { allowConstantExport: true },
       ],
+      // Codebase convention: prefix an intentionally-unused destructured
+      // prop/arg with `_` (e.g. `{ child: _child }`) instead of suppressing
+      // the rule inline. Wasn't actually wired up until now.
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        { argsIgnorePattern: '^_', varsIgnorePattern: '^_', destructuredArrayIgnorePattern: '^_' },
+      ],
     },
   },
 )

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Icon, Sparkline, Trend } from '../../components/ui';
+import { Icon, Sparkline, Trend, type IconName } from '../../components/ui';
 import { ALC_DATA } from '../../data/seed';
 import { useAppStore } from '../../store/app-store';
 
@@ -81,7 +81,7 @@ export const StudentMe: React.FC = () => {
         <div className="row wrap" style={{ gap: 10 }}>
           {badges.map(b => (
             <div key={b.label} className={`tone-${b.tone}`} style={{ padding: '10px 16px', borderRadius: 20, background: 'var(--tone-soft)', color: 'var(--tone-ink)', display: 'flex', gap: 6, alignItems: 'center', fontWeight: 700, fontSize: 13 }}>
-              <Icon name={b.icon as any} size={14}/>
+              <Icon name={b.icon as IconName} size={14}/>
               {b.label}
             </div>
           ))}
