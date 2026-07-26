@@ -22,6 +22,29 @@ When working on onboarding, **start from the schema doc** above — it captures 
 
 The public intake form itself (Epic A) is done and correct. What's still missing is entirely staff-facing screens — the owner queue, assessment booking, report sign-off/send, and in-visit observation capture only exist as backend API today, with zero frontend. Tracked as Jira Epic [SCRUM-89](https://acornslearningcentre.atlassian.net/browse/SCRUM-89), scoped in [documents/features/15-onboarding.md](documents/features/15-onboarding.md).
 
+## Sprint sequence (16 sprints, one epic each)
+
+Sprint 1 (Login & Accounts) shipped. The remaining 15 sprints were reordered on 2026-07-26 to front-load the onboarding journey — it's the client-demo priority, and three existing epics turned out to be part of the same user journey once audited, so they got pulled forward together rather than left in their original build-order slots:
+
+1. Real Login & Accounts (SCRUM-16) — **done**
+2. Onboarding Journey: Staff-Facing Screens (SCRUM-89) — no new DB/API needed, pure frontend against the already-working prospects/assessments/observations backend
+3. AI-Drafted Assessment Reports (SCRUM-82) — completes the "sign off and send" story's draft step
+4. Media Upload & Real Email Delivery (SCRUM-85) — completes the same story's actual send step
+5. Classroom Roster (SCRUM-22) — real children/teachers tables, needed by...
+6. User Creation & Account Provisioning (SCRUM-95) — depends on #2 and #5 both existing (needs a real "enrolled" trigger and real child/teacher records to link accounts to)
+7. Today's Daily Flow (SCRUM-30)
+8. Classroom Observations for Enrolled Children (SCRUM-35)
+9. AI Suggestions & Next Steps (SCRUM-39)
+10. Lesson Planning (SCRUM-45)
+11. Child & Class Progress Tracking (SCRUM-50)
+12. Teacher ⇄ Parent Messaging (SCRUM-54)
+13. AI Assistant Chat (SCRUM-59)
+14. Child Reports & Sign-off (SCRUM-63)
+15. Student Self-Service Progress (SCRUM-68)
+16. School Leader Analytics Dashboards (SCRUM-76)
+
+Sprints 7 onward kept their original relative order — only #2–6 moved. If priorities shift again, re-run the same pattern: rename+redate the existing Jira sprints via `PUT /rest/agile/1.0/sprint/{id}` (must include `state`, or the call is rejected) rather than deleting and recreating them, since only genuinely new epics need a new sprint object.
+
 ## Stack
 
 - **React 18** + **TypeScript** + **Vite 5** (`frontend/`)
