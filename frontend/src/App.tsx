@@ -14,6 +14,7 @@ import { ReviewGuide } from './components/review/ReviewGuide';
 import { VariantSwitch } from './components/v2/VariantSwitch';
 import { IntakeFlow } from './screens/intake/IntakeFlow';
 import { featureFlags } from './lib/feature-flags';
+import { fetchMe } from './lib/auth-api';
 import type { Role } from './data/types';
 
 function useV2Path() {
@@ -43,9 +44,22 @@ function useWelcomePath() {
 }
 
 function App() {
-  const { authed, role, variant, login } = useAppStore();
+  const { authed, role, variant, token, login, logout } = useAppStore();
   const [isV2, setIsV2] = useV2Path();
   const isWelcome = useWelcomePath();
+
+  // Validate a stored session against the server on load — a genuinely
+  // expired/revoked session (or a pre-SCRUM-100 fake one with no real
+  // token) signs the person out for real, rather than trusting the local
+  // "authed" flag forever.
+  useEffect(() => {
+    if (!authed) return;
+    if (!token) { logout(); return; }
+    fetchMe(token).catch(() => logout());
+    // Only re-check when the token itself changes (i.e. a fresh login) —
+    // not on every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token]);
 
   // Build-time feature flag (Railway: VITE_SHOW_V1). When false (the demo
   // default), the legacy v1 surface is hidden — body.v2 is always on, the
@@ -65,7 +79,7 @@ function App() {
     document.body.classList.toggle('v2', v2Active);
   }, [v2Active]);
 
-  const handleLogin = (r: Role, opts?: { childId?: string }) => {
+  const handleLogin = (r: Role, opts?: { childId?: string; token?: string; name?: string; teacherId?: string | null }) => {
     login(r, opts);
   };
 

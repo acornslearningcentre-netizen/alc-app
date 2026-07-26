@@ -1,14 +1,14 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Icon, BrandLogo } from '../../../components/ui';
-import { ALC_DATA } from '../../../data/seed';
 import type { Role } from '../../../data/types';
+import { loginWithPassword, loginWithPasscode, type AuthSession } from '../../../lib/auth-api';
 import '../../../styles/v2/login.css';
 
 type Track = 'school' | 'family';
 type Step = 'track' | 'role' | 'auth';
 
 interface Props {
-  onLogin: (role: Role, opts?: { childId?: string }) => void;
+  onLogin: (role: Role, opts?: { childId?: string; token?: string; name?: string; teacherId?: string | null }) => void;
 }
 
 const STEP_LABELS: Record<Step, string> = {
@@ -82,13 +82,28 @@ export const LoginV2: React.FC<Props> = ({ onLogin }) => {
           {step === 'track' && <TrackStep onPick={(t) => { setTrack(t); setStep('role'); }}/>}
           {step === 'role' && track && <RoleStep track={track} onPick={(r) => { setRole(r); setStep('auth'); }}/>}
           {step === 'auth' && track === 'school' && role && (
-            <SchoolAuth role={role as 'teacher' | 'leader'} onLogin={() => onLogin(role as Role)}/>
+            <SchoolAuth
+              role={role as 'teacher' | 'leader'}
+              onLogin={(session) => onLogin(session.user.role as Role, {
+                token: session.token,
+                name: session.user.name,
+                teacherId: session.user.teacherId,
+              })}
+            />
           )}
           {step === 'auth' && track === 'family' && role === 'parent' && (
-            <ParentAuth onLogin={(childId) => onLogin('parent', { childId })}/>
+            <ParentAuth onLogin={(session) => onLogin('parent', {
+              childId: session.user.childId ?? undefined,
+              token: session.token,
+              name: session.user.name,
+            })}/>
           )}
           {step === 'auth' && track === 'family' && role === 'student' && (
-            <StudentAuth onLogin={(childId) => onLogin('student', { childId })}/>
+            <StudentAuth onLogin={(session) => onLogin('student', {
+              childId: session.user.childId ?? undefined,
+              token: session.token,
+              name: session.user.name,
+            })}/>
           )}
         </section>
       </div>
@@ -184,23 +199,60 @@ const RoleStep: React.FC<{ track: Track; onPick: (r: string) => void }> = ({ tra
   );
 };
 
-const SchoolAuth: React.FC<{ role: 'teacher' | 'leader'; onLogin: () => void }> = ({ role, onLogin }) => (
-  <div>
-    <h2 className="v2-login-step-title">{role === 'teacher' ? <>Welcome back, <em>teacher.</em></> : 'Welcome back.'}</h2>
-    <p className="v2-login-step-sub">One tap and you're in. No password needed.</p>
+const SchoolAuth: React.FC<{ role: 'teacher' | 'leader'; onLogin: (session: AuthSession) => void }> = ({ role, onLogin }) => {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
 
-    <div className="v2-cascade" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-      <button className="v2-btn primary" onClick={onLogin} style={{ padding: '14px 18px', justifyContent: 'center' }}>
-        <span style={{ width: 16, height: 16, borderRadius: 2, background: '#fff', display: 'grid', placeItems: 'center', fontSize: 10, fontWeight: 800, color: '#4285F4', border: '1px solid #dadce0' }}>G</span>
-        Continue with Google Workspace
-      </button>
-      <button className="v2-btn" onClick={onLogin} style={{ padding: '14px 18px', justifyContent: 'center' }}>
-        <span style={{ width: 16, height: 16, borderRadius: 2, background: '#0078D4', color: '#fff', display: 'grid', placeItems: 'center', fontSize: 10, fontWeight: 800 }}>M</span>
-        Continue with Microsoft
-      </button>
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    setLoading(true);
+    try {
+      const session = await loginWithPassword(email, password);
+      onLogin(session);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Something went wrong. Try again.');
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div>
+      <h2 className="v2-login-step-title">{role === 'teacher' ? <>Welcome back, <em>teacher.</em></> : 'Welcome back.'}</h2>
+      <p className="v2-login-step-sub">Sign in with your email and password.</p>
+
+      <form onSubmit={submit} className="v2-cascade" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        <input
+          type="email"
+          required
+          autoFocus
+          autoComplete="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="you@acornslearningcentre.com"
+          aria-label="Email"
+          className="v2-text-input"
+        />
+        <input
+          type="password"
+          required
+          autoComplete="current-password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          placeholder="Password"
+          aria-label="Password"
+          className="v2-text-input"
+        />
+        {error && <div className="v2-login-error">{error}</div>}
+        <button type="submit" className="v2-btn primary" disabled={loading} style={{ padding: '14px 18px', justifyContent: 'center' }}>
+          {loading ? 'Signing in…' : 'Sign in'}
+        </button>
+      </form>
     </div>
-  </div>
-);
+  );
+};
 
 const PasscodePad: React.FC<{
   value: string[];
@@ -232,15 +284,27 @@ const PasscodePad: React.FC<{
   );
 };
 
-const ParentAuth: React.FC<{ onLogin: (childId: string) => void }> = ({ onLogin }) => {
+// Same demo codes seeded in backend/server.js's AUTH_SEED — shown as a
+// hint on the demo, same as before, but the check itself now hits the
+// real server instead of a local lookup table.
+const DEMO_PARENT_CODES = ['0000'];
+const DEMO_STUDENT_CODES = ['0000', '1111'];
+
+const ParentAuth: React.FC<{ onLogin: (session: AuthSession) => void }> = ({ onLogin }) => {
   const [code, setCode] = useState(['','','','']);
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<{ parentName: string; childName: string } | null>(null);
+  const [success, setSuccess] = useState<{ session: AuthSession } | null>(null);
 
-  const tryLogin = (full: string) => {
-    const match = ALC_DATA.parentPasscodes[full];
-    if (match) { setError(null); setSuccess(match); setTimeout(() => onLogin(match.childId), 650); }
-    else { setError("That passcode doesn't match. Try again."); setTimeout(() => setCode(['','','','']), 50); }
+  const tryLogin = async (full: string) => {
+    try {
+      const session = await loginWithPasscode(full, 'parent');
+      setError(null);
+      setSuccess({ session });
+      setTimeout(() => onLogin(session), 650);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "That passcode doesn't match. Try again.");
+      setTimeout(() => setCode(['','','','']), 50);
+    }
   };
 
   if (success) return (
@@ -248,12 +312,11 @@ const ParentAuth: React.FC<{ onLogin: (childId: string) => void }> = ({ onLogin 
       <div style={{ width: 56, height: 56, borderRadius: 999, background: 'var(--v2-moss)', color: 'var(--v2-moss-ink)', display: 'grid', placeItems: 'center', margin: '0 auto 18px' }}>
         <Icon name="check" size={22}/>
       </div>
-      <h2 className="v2-login-step-title">Welcome, <em>{success.parentName.split(' ')[0]}.</em></h2>
-      <p className="v2-login-step-sub">Opening {success.childName}'s profile…</p>
+      <h2 className="v2-login-step-title">Welcome, <em>{success.session.user.name.split(' ')[0]}.</em></h2>
+      <p className="v2-login-step-sub">Opening your family profile…</p>
     </div>
   );
 
-  const codes = Object.keys(ALC_DATA.parentPasscodes);
   return (
     <div>
       <h2 className="v2-login-step-title">Welcome back.</h2>
@@ -267,23 +330,29 @@ const ParentAuth: React.FC<{ onLogin: (childId: string) => void }> = ({ onLogin 
       )}
       <p className="v2-login-fineprint">
         Demo ·{' '}
-        {codes.map((c, i) => (
-          <React.Fragment key={c}><span className="v2-mono">{c}</span>{i < codes.length - 1 ? ' / ' : ''}</React.Fragment>
+        {DEMO_PARENT_CODES.map((c, i) => (
+          <React.Fragment key={c}><span className="v2-mono">{c}</span>{i < DEMO_PARENT_CODES.length - 1 ? ' / ' : ''}</React.Fragment>
         ))}
       </p>
     </div>
   );
 };
 
-const StudentAuth: React.FC<{ onLogin: (childId: string) => void }> = ({ onLogin }) => {
+const StudentAuth: React.FC<{ onLogin: (session: AuthSession) => void }> = ({ onLogin }) => {
   const [code, setCode] = useState(['','','','']);
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<{ childName: string } | null>(null);
+  const [success, setSuccess] = useState<{ session: AuthSession } | null>(null);
 
-  const tryLogin = (full: string) => {
-    const match = ALC_DATA.studentPasscodes[full];
-    if (match) { setError(null); setSuccess(match); setTimeout(() => onLogin(match.childId), 650); }
-    else { setError("That's not quite right. Ask your teacher for your passcode."); setTimeout(() => setCode(['','','','']), 50); }
+  const tryLogin = async (full: string) => {
+    try {
+      const session = await loginWithPasscode(full, 'student');
+      setError(null);
+      setSuccess({ session });
+      setTimeout(() => onLogin(session), 650);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "That's not quite right. Ask your teacher for your passcode.");
+      setTimeout(() => setCode(['','','','']), 50);
+    }
   };
 
   if (success) return (
@@ -291,12 +360,11 @@ const StudentAuth: React.FC<{ onLogin: (childId: string) => void }> = ({ onLogin
       <div style={{ width: 60, height: 60, borderRadius: 999, background: 'var(--v2-moss)', color: 'var(--v2-moss-ink)', display: 'grid', placeItems: 'center', margin: '0 auto 18px' }}>
         <Icon name="star" size={26}/>
       </div>
-      <h2 className="v2-login-step-title">Hi, <em>{success.childName}.</em></h2>
+      <h2 className="v2-login-step-title">Hi, <em>{success.session.user.name}.</em></h2>
       <p className="v2-login-step-sub">Opening your learning space…</p>
     </div>
   );
 
-  const codes = Object.keys(ALC_DATA.studentPasscodes);
   return (
     <div>
       <h2 className="v2-login-step-title">Hello.</h2>
@@ -310,8 +378,8 @@ const StudentAuth: React.FC<{ onLogin: (childId: string) => void }> = ({ onLogin
       )}
       <p className="v2-login-fineprint">
         Demo ·{' '}
-        {codes.map((c, i) => (
-          <React.Fragment key={c}><span className="v2-mono">{c}</span>{i < codes.length - 1 ? ' / ' : ''}</React.Fragment>
+        {DEMO_STUDENT_CODES.map((c, i) => (
+          <React.Fragment key={c}><span className="v2-mono">{c}</span>{i < DEMO_STUDENT_CODES.length - 1 ? ' / ' : ''}</React.Fragment>
         ))}
       </p>
     </div>
