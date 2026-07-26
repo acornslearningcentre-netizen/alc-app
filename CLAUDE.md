@@ -220,6 +220,8 @@ When the user says **"deploy code"**, do the following without asking for confir
 
 CI runs both test suites via GitHub Actions on every push/PR to `main` — see [`.github/workflows/test.yml`](.github/workflows/test.yml) (`backend` job: `npm ci && npm test` in `backend/`; `frontend` job: `npm ci && npm test && npm run lint && npm run build` in `frontend/`). Neither service's Railway deploy trigger runs tests itself — passing CI is a separate signal, not something Railway blocks on.
 
+**When the prompt names an epic, not a single ticket** (e.g. "implement SCRUM-89", "do the Onboarding epic"): pick up every story under that epic and work through them **one at a time, sequentially**, running the full steps 1–9 below for each. Give status updates while working (branch created, PR opened, etc. — same as ever), but **only give a wrap-up/completion summary once every story under the epic is merged, deployed, and confirmed working** — not one after each individual ticket. If a story turns out to be blocked (needs a dependency that isn't done yet), say so and either skip to the next unblocked story or stop and ask, rather than silently reporting partial completion as done.
+
 When picking up a piece of work that starts from a Jira ticket (e.g. "pick up SCRUM-17", "work on the next story"):
 
 1. **Create a new branch named exactly the ticket key** — e.g. `SCRUM-17`, nothing appended. Never implement ticket work directly on `main`.
