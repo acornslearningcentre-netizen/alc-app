@@ -167,6 +167,21 @@ When the user says **"deploy code"**, do the following without asking for confir
 2. Push `main` to the GitHub remote.
 3. Confirm the change actually deployed to Railway: check `railway status` for **both** `alc-app-backend` and `alc-app-frontend` (a frontend-only change won't show up on the backend's deployment, and vice versa), and if either doesn't show up or fails, run `railway up --service <name> -c` for that service and watch the build/deploy logs until it succeeds (or report the failure with the relevant log lines).
 
+## Feature workflow: Jira → branch → CI → merge
+
+CI runs both test suites via GitHub Actions on every push/PR to `main` — see [`.github/workflows/test.yml`](.github/workflows/test.yml) (`backend` job: `npm ci && npm test` in `backend/`; `frontend` job: `npm ci && npm test && npm run lint && npm run build` in `frontend/`). Neither service's Railway deploy trigger runs tests itself — passing CI is a separate signal, not something Railway blocks on.
+
+When picking up a piece of work that starts from a Jira ticket (e.g. "pick up SCRUM-17", "work on the next story"):
+
+1. **Create a new branch first** — never implement ticket work directly on `main`. Name it `<ticket-key>-<short-slug>` in lowercase, e.g. `scrum-17-login-accounts-db`.
+2. Do the implementation work on that branch, committing normally. Push the branch (not `main`) as work progresses.
+3. Open a PR from the branch into `main` once the work is ready to be looked at — this makes CI run on the PR (a pre-merge signal), and gives the user something to review/pull down for manual testing.
+4. **Wait for the user to say "test complete" (or equivalent) before merging to `main`.** This is a manual QA gate independent of CI — don't merge on CI passing alone, and don't merge speculatively before being told testing is done.
+5. Once told testing is complete: merge the PR into `main`. Because both app services auto-deploy on push to `main` (see *Deployment — Railway* above), merging **is** the deploy trigger — there's no separate deploy step.
+6. Confirm CI is green on the resulting `main` commit and that both Railway services redeployed successfully (`railway status` for `alc-app-backend` and `alc-app-frontend`, or the "Deploy code" verification steps above). If CI fails post-merge despite passing on the PR (flaky test, environment drift), flag it — don't treat the merge as done until it's green.
+
+This is separate from the **"Deploy code"** instruction above, which is for direct, non-ticket-driven pushes straight to `main` (hotfixes, config tweaks) — that one skips the branch/PR/testing-gate ceremony entirely, by design, since the user is asking for something immediate.
+
 ## Working agreements
 
 - **No new features without a problem.** This project is moving from "build everything" to "solve the most painful onboarding step first." Anything that doesn't move the demo forward goes in `documents/` as a future-feature note.
