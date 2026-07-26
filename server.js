@@ -3,11 +3,13 @@
 //   - /api/review/*    — reviewer-guide feedback (existing)
 //   - /api/intake, /api/prospects/*, /api/assessments/*, /api/observations/*
 //     — onboarding journey (Epic B onwards)
+//   - /api/auth/*      — real login/session backend (SCRUM-16, Sprint 1)
 // In Railway, set DATA_DIR=/data and mount a volume there so data survives redeploys.
 import express from 'express';
 import Database from 'better-sqlite3';
 import path from 'node:path';
 import fs from 'node:fs';
+import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -130,6 +132,32 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_observations_child    ON observations(child_id);
   CREATE INDEX IF NOT EXISTS idx_observations_kind     ON observations(kind);
   CREATE INDEX IF NOT EXISTS idx_observations_captured ON observations(captured_at DESC);
+
+  -- Auth (SCRUM-16 / SCRUM-17): real accounts and sessions, replacing the
+  -- passcode-in-the-frontend-bundle login. Staff (teacher/leader) sign in
+  -- with email+password; parent/student sign in with a short passcode.
+  -- child_id / teacher_id are loose opaque refs for now — the real children
+  -- and teachers tables land in SCRUM-22 (Classroom Roster, Sprint 2).
+  CREATE TABLE IF NOT EXISTS users (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    role          TEXT NOT NULL CHECK (role IN ('teacher','parent','student','leader')),
+    email         TEXT UNIQUE,           -- staff login only (teacher/leader)
+    password_hash TEXT,                  -- staff login only; salt:scrypt-hash, never plain text
+    passcode_hash TEXT,                  -- parent/student login only; HMAC-SHA256, never plain text
+    name          TEXT NOT NULL,
+    child_id      TEXT,                  -- opaque ref; no children table yet (SCRUM-22)
+    teacher_id    TEXT,                  -- opaque ref; no teachers table yet (SCRUM-22)
+    created_at    TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE INDEX IF NOT EXISTS idx_users_role_passcode ON users(role, passcode_hash);
+
+  CREATE TABLE IF NOT EXISTS sessions (
+    id          TEXT PRIMARY KEY,        -- opaque session token (also the bearer token)
+    user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+    expires_at  TEXT NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
 `);
 
 // Idempotent migrations for databases created before priority existed.
@@ -142,7 +170,123 @@ const ensureColumn = (table, column, decl) => {
 ensureColumn('feature_feedback', 'priority', 'TEXT');
 ensureColumn('requests', 'priority', 'TEXT');
 
+// ── Auth helpers (SCRUM-16) ─────────────────────────────────────────────────
+// Passwords: per-user random salt + scrypt (verified after an email lookup).
+// Passcodes: keyed HMAC so a family/child can be found by passcode alone,
+// the way the login screen already works — no separate username field.
+const PASSCODE_PEPPER = process.env.PASSCODE_PEPPER;
+if (!PASSCODE_PEPPER) {
+  console.warn('PASSCODE_PEPPER is not set — using an insecure dev-only default. Set it in Railway for production.');
+}
+const passcodePepper = PASSCODE_PEPPER || 'dev-only-insecure-pepper-change-me';
+const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+
+const hashPassword = (password) => {
+  const salt = crypto.randomBytes(16).toString('hex');
+  const hash = crypto.scryptSync(password, salt, 64).toString('hex');
+  return `${salt}:${hash}`;
+};
+const verifyPassword = (password, stored) => {
+  if (!stored) return false;
+  const [salt, hash] = stored.split(':');
+  if (!salt || !hash) return false;
+  const candidate = crypto.scryptSync(password, salt, 64);
+  const expected = Buffer.from(hash, 'hex');
+  return candidate.length === expected.length && crypto.timingSafeEqual(candidate, expected);
+};
+const hashPasscode = (passcode) => crypto.createHmac('sha256', passcodePepper).update(passcode).digest('hex');
+const genToken = () => crypto.randomBytes(32).toString('hex');
+
+const publicUser = (u) => u && ({
+  id: u.id,
+  role: u.role,
+  name: u.name,
+  email: u.email ?? null,
+  childId: u.child_id ?? null,
+  teacherId: u.teacher_id ?? null,
+});
+
+const createSession = (userId) => {
+  const token = genToken();
+  const expiresAt = new Date(Date.now() + SESSION_TTL_MS).toISOString();
+  db.prepare('INSERT INTO sessions (id, user_id, expires_at) VALUES (?, ?, ?)').run(token, userId, expiresAt);
+  return { token, expiresAt };
+};
+
+// Very small in-memory throttle: flags unusually many failed attempts from
+// the same IP without permanently locking a family out of a shared device.
+const failedAttempts = new Map(); // ip -> { count, windowStart }
+const FAILED_ATTEMPT_WINDOW_MS = 15 * 60 * 1000;
+const FAILED_ATTEMPT_LIMIT = 10;
+const tooManyFailedAttempts = (ip) => {
+  const entry = failedAttempts.get(ip);
+  if (!entry) return false;
+  if (Date.now() - entry.windowStart > FAILED_ATTEMPT_WINDOW_MS) {
+    failedAttempts.delete(ip);
+    return false;
+  }
+  return entry.count >= FAILED_ATTEMPT_LIMIT;
+};
+const recordFailedAttempt = (ip) => {
+  const entry = failedAttempts.get(ip);
+  if (!entry || Date.now() - entry.windowStart > FAILED_ATTEMPT_WINDOW_MS) {
+    failedAttempts.set(ip, { count: 1, windowStart: Date.now() });
+  } else {
+    entry.count += 1;
+  }
+};
+
+const requireAuth = (req, res, next) => {
+  const header = req.headers.authorization ?? '';
+  const token = header.startsWith('Bearer ') ? header.slice(7).trim() : null;
+  if (!token) return res.status(401).json({ error: 'not signed in' });
+
+  const session = db.prepare('SELECT * FROM sessions WHERE id = ?').get(token);
+  if (!session || session.expires_at < new Date().toISOString()) {
+    if (session) db.prepare('DELETE FROM sessions WHERE id = ?').run(token);
+    return res.status(401).json({ error: 'session expired, please sign in again' });
+  }
+  const user = db.prepare('SELECT * FROM users WHERE id = ?').get(session.user_id);
+  if (!user) return res.status(401).json({ error: 'not signed in' });
+
+  req.user = user;
+  req.token = token;
+  next();
+};
+
+// Demo seed accounts — mirrors the passcodes already in src/data/seed.ts so
+// the same demo login story works with a real backend behind it. Only runs
+// once (skipped if any user already exists).
+const AUTH_SEED = [
+  { role: 'teacher', email: 'ana@acornslearningcentre.com', password: 'AcornsDemo!1', name: 'Ana' },
+  { role: 'leader', email: 'leader@acornslearningcentre.com', password: 'AcornsDemo!1', name: 'Dr. Okafor' },
+  { role: 'parent', passcode: '0000', name: 'Ravi Shah', child_id: 'c5' },
+  { role: 'student', passcode: '0000', name: 'Amara', child_id: 'c1' },
+  { role: 'student', passcode: '1111', name: 'Mei', child_id: 'c3' },
+];
+if (db.prepare('SELECT COUNT(*) AS n FROM users').get().n === 0) {
+  const insertUser = db.prepare(`
+    INSERT INTO users (role, email, password_hash, passcode_hash, name, child_id)
+    VALUES (@role, @email, @password_hash, @passcode_hash, @name, @child_id)
+  `);
+  const seedTx = db.transaction(() => {
+    for (const u of AUTH_SEED) {
+      insertUser.run({
+        role: u.role,
+        email: u.email ? u.email.toLowerCase() : null,
+        password_hash: u.password ? hashPassword(u.password) : null,
+        passcode_hash: u.passcode ? hashPasscode(u.passcode) : null,
+        name: u.name,
+        child_id: u.child_id ?? null,
+      });
+    }
+  });
+  seedTx();
+  console.log(`Seeded ${AUTH_SEED.length} demo auth accounts`);
+}
+
 const app = express();
+app.set('trust proxy', 1); // Railway sits behind a proxy — needed for accurate req.ip
 app.use(express.json({ limit: '64kb' }));
 
 // ── API ──────────────────────────────────────────────────────────────────────
@@ -256,6 +400,61 @@ app.delete('/api/review/requests/:id', (req, res) => {
   const id = idParam(req, res); if (!id) return;
   db.prepare('DELETE FROM requests WHERE id = ?').run(id);
   res.status(204).end();
+});
+
+// ── /api/auth (SCRUM-16) ────────────────────────────────────────────────────
+const authEmailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const clientIp = (req) => req.ip ?? req.socket?.remoteAddress ?? 'unknown';
+
+app.post('/api/auth/login', (req, res) => {
+  const ip = clientIp(req);
+  if (tooManyFailedAttempts(ip)) {
+    return res.status(429).json({ error: 'too many failed attempts — please wait a few minutes and try again' });
+  }
+  const { email, password } = req.body ?? {};
+  if (!authEmailRe.test(trim(email)) || !trim(password)) {
+    return res.status(400).json({ error: 'email and password are required' });
+  }
+  const user = db.prepare("SELECT * FROM users WHERE email = ? AND role IN ('teacher','leader')")
+    .get(trim(email).toLowerCase());
+  if (!user || !verifyPassword(password, user.password_hash)) {
+    recordFailedAttempt(ip);
+    return res.status(401).json({ error: 'that email and password combination is incorrect' });
+  }
+  const { token } = createSession(user.id);
+  res.status(201).json({ token, user: publicUser(user) });
+});
+
+app.post('/api/auth/passcode', (req, res) => {
+  const ip = clientIp(req);
+  if (tooManyFailedAttempts(ip)) {
+    return res.status(429).json({ error: 'too many failed attempts — please wait a few minutes and try again' });
+  }
+  const { passcode, role } = req.body ?? {};
+  const r = trim(role);
+  if (r !== 'parent' && r !== 'student') {
+    return res.status(400).json({ error: "role must be 'parent' or 'student'" });
+  }
+  if (!trim(passcode)) {
+    return res.status(400).json({ error: 'passcode is required' });
+  }
+  const user = db.prepare('SELECT * FROM users WHERE role = ? AND passcode_hash = ?')
+    .get(r, hashPasscode(trim(passcode)));
+  if (!user) {
+    recordFailedAttempt(ip);
+    return res.status(401).json({ error: "that passcode doesn't match" });
+  }
+  const { token } = createSession(user.id);
+  res.status(201).json({ token, user: publicUser(user) });
+});
+
+app.post('/api/auth/logout', requireAuth, (req, res) => {
+  db.prepare('DELETE FROM sessions WHERE id = ?').run(req.token);
+  res.status(204).end();
+});
+
+app.get('/api/auth/me', requireAuth, (req, res) => {
+  res.json(publicUser(req.user));
 });
 
 // ── Onboarding ───────────────────────────────────────────────────────────────
