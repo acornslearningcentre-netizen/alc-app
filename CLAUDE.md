@@ -246,7 +246,7 @@ This is separate from the **"Deploy code"** instruction above, which is for dire
 - **The first 4 weeks of a child's enrolment are continuous reassessment.** The baseline isn't a single moment — it's a window. Schemas and prompts must accommodate "I thought X but actually Y" updates.
 - **GDPR matters.** Storing minor children's data needs a plain-language consent line on the intake form (Q22 + Q23). Don't ship to real prospects without it.
 - **Whenever a ticket touches login/credentials, surface working test credentials when reporting completion.** The user needs to actually log in and try it — don't make them ask for it separately.
-- **Completion summaries are short, punchy, bullet-pointed, plain language — never verbose.** What changed, what's next, what's needed from them. No headers-within-headers, no restating the whole ticket back.
+- **Completion summaries are short, punchy, bullet-pointed, plain language — never verbose.** What changed, what's next, what's needed from them, and **what they can actually go test/click on**. No headers-within-headers, no restating the whole ticket back.
 
 ## Not in scope (yet)
 
