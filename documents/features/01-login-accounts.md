@@ -8,6 +8,8 @@ Replace the fake, browser-only login with real accounts checked on the server.
 
 The login screen checks a 4-character passcode against a hardcoded list written into the app's code, and "being logged in" is just a flag saved in the browser. Anyone who reads the app's code can see every family's passcode.
 
+**Update (2026-07-26):** the backend (`/api/auth/login`, `/passcode`, `/logout`, `/me`) is built and deployed, but `LoginScreen.tsx` was never wired to it — every persona still checks the old hardcoded list. Separately, the staff sign-in screen's actual UI copy promises Google Workspace/Microsoft SSO ("no password needed") even though the backend built is email+password — a real mismatch, not just a wiring gap. **Decision: staff sign-in stays email+password** (real SSO is real OAuth infrastructure, out of scope for now); the SSO buttons get replaced with an actual password form as part of the wiring work. Tracked as [SCRUM-100](https://acornslearningcentre.atlassian.net/browse/SCRUM-100).
+
 ## Acceptance criteria
 
 This feature is done when all of the following are true:

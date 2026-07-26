@@ -42,6 +42,10 @@ Tells the app who is currently signed in, so the right dashboard loads.
 - [ ] If someone is signed in, this confirms their role (teacher, parent, student, or leader) and name.
 - [ ] If no one is signed in, this clearly says so, and the app sends the person back to the login screen instead of showing any private data.
 
+## Frontend wiring gap (2026-07-26)
+
+All four endpoints above are built and deployed, but `frontend/src/screens/login/LoginScreen.tsx` doesn't call any of them yet — see [SCRUM-100](https://acornslearningcentre.atlassian.net/browse/SCRUM-100). The staff sign-in UI also currently shows Google Workspace/Microsoft SSO buttons that don't correspond to `POST /api/auth/login`'s actual email+password contract — that's being replaced with a real password form as part of the same ticket, not a separate SSO endpoint.
+
 ## Related feature
 
 See [`documents/features/01-login-accounts.md`](../features/01-login-accounts.md) for what this looks like from a teacher/parent/student/leader's point of view.
