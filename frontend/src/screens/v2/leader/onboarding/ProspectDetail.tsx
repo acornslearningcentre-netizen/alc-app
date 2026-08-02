@@ -6,7 +6,8 @@ import { Icon } from '../../../../components/ui';
 import { intakeQuestions, type IntakeAnswerValue } from '../../../../data/intake-questions';
 import {
   getProspect, updateProspectStatus, bookAssessment,
-  type ProspectDetail as ProspectDetailData, type ProspectStatus,
+  updateAssessmentDraft, signOffAssessment, sendAssessment,
+  type ProspectDetail as ProspectDetailData, type ProspectStatus, type Assessment,
 } from '../../../../lib/onboarding-api';
 
 const STATUS_OPTIONS: ProspectStatus[] = ['prospect', 'booked', 'assessed', 'enrolled', 'declined'];
@@ -51,6 +52,13 @@ export const ProspectDetail: React.FC<{ id: number; onBack: () => void }> = ({ i
     } finally {
       setStatusSaving(false);
     }
+  };
+
+  const patchAssessment = (updated: Assessment) => {
+    setData((prev) => prev && {
+      ...prev,
+      assessments: prev.assessments.map((a) => (a.id === updated.id ? updated : a)),
+    });
   };
 
   if (error) {
@@ -154,8 +162,11 @@ export const ProspectDetail: React.FC<{ id: number; onBack: () => void }> = ({ i
           <h3 style={{ marginBottom: 12 }}>Assessments</h3>
           {data.assessments.length === 0 && <div className="muted" style={{ fontSize: 13, marginBottom: 12 }}>None booked yet.</div>}
           {data.assessments.map((a) => (
-            <div key={a.id} style={{ padding: '8px 0', borderBottom: '1px dashed var(--line)', fontSize: 13 }}>
-              {a.scheduled_for ? new Date(a.scheduled_for).toLocaleString() : 'No time set'} · <span className="chip" style={{ fontSize: 11 }}>{a.status}</span>
+            <div key={a.id} style={{ padding: '10px 0', borderBottom: '1px dashed var(--line)' }}>
+              <div style={{ fontSize: 13, marginBottom: 6 }}>
+                {a.scheduled_for ? new Date(a.scheduled_for).toLocaleString() : 'No time set'} · <span className="chip" style={{ fontSize: 11 }}>{a.status}</span>
+              </div>
+              <ReportPanel assessment={a} onChange={patchAssessment}/>
             </div>
           ))}
           <BookAssessmentForm prospectId={id} onBooked={load}/>
@@ -230,6 +241,117 @@ const BookAssessmentForm: React.FC<{ prospectId: number; onBooked: () => void }>
         {saving ? 'Booking…' : 'Book assessment'}
       </button>
     </form>
+  );
+};
+
+// SCRUM-93 — assessment report: review the AI-drafted report, edit it,
+// sign it off, and send it to the parent. Sign-off locks editing; send is
+// only reachable after sign-off — matches the "someone always signs off"
+// rule for anything AI-drafted that reaches a family.
+const ReportPanel: React.FC<{ assessment: Assessment; onChange: (updated: Assessment) => void }> = ({ assessment, onChange }) => {
+  const [draft, setDraft] = useState(assessment.report_draft ?? '');
+  const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState<'draft' | 'sign-off' | 'send' | null>(null);
+
+  const signedOff = Boolean(assessment.report_signed_off_at);
+  const sent = Boolean(assessment.sent_to_parent_at);
+  const dirty = draft !== (assessment.report_draft ?? '');
+
+  const saveDraft = async () => {
+    setError(null);
+    setSaving('draft');
+    try {
+      onChange(await updateAssessmentDraft(assessment.id, draft));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not save the draft.');
+    } finally {
+      setSaving(null);
+    }
+  };
+
+  const doSignOff = async () => {
+    setError(null);
+    setSaving('sign-off');
+    try {
+      onChange(await signOffAssessment(assessment.id));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not sign off this report.');
+    } finally {
+      setSaving(null);
+    }
+  };
+
+  const doSend = async () => {
+    setError(null);
+    setSaving('send');
+    try {
+      onChange(await sendAssessment(assessment.id));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not send this report.');
+    } finally {
+      setSaving(null);
+    }
+  };
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <div className="tiny">Assessment report</div>
+      <textarea
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        disabled={signedOff}
+        placeholder="No draft yet — the AI-drafted report will appear here once it's generated."
+        rows={5}
+        aria-label="Assessment report draft"
+        className="v2-text-input"
+        style={{ padding: '10px 12px', fontSize: 13, fontFamily: 'inherit', resize: 'vertical' }}
+      />
+      {sent ? (
+        <div className="chip tone-sage" style={{ fontSize: 11, alignSelf: 'flex-start' }}>
+          <Icon name="check" size={11}/> Sent to parent {new Date(assessment.sent_to_parent_at!).toLocaleDateString()}
+        </div>
+      ) : signedOff ? (
+        <div className="chip tone-sage" style={{ fontSize: 11, alignSelf: 'flex-start' }}>
+          <Icon name="check" size={11}/> Signed off {new Date(assessment.report_signed_off_at!).toLocaleDateString()} — final
+        </div>
+      ) : null}
+      {error && <div className="v2-login-error">{error}</div>}
+      <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
+        {!signedOff && (
+          <button
+            type="button"
+            className="btn"
+            disabled={!dirty || saving !== null}
+            onClick={saveDraft}
+            style={{ fontSize: 12.5, padding: '6px 12px' }}
+          >
+            {saving === 'draft' ? 'Saving…' : 'Save draft'}
+          </button>
+        )}
+        {!signedOff && (
+          <button
+            type="button"
+            className="btn primary"
+            disabled={!draft.trim() || dirty || saving !== null}
+            onClick={doSignOff}
+            style={{ fontSize: 12.5, padding: '6px 12px' }}
+          >
+            {saving === 'sign-off' ? 'Signing off…' : 'Sign off'}
+          </button>
+        )}
+        {signedOff && !sent && (
+          <button
+            type="button"
+            className="btn primary"
+            disabled={saving !== null}
+            onClick={doSend}
+            style={{ fontSize: 12.5, padding: '6px 12px' }}
+          >
+            {saving === 'send' ? 'Sending…' : 'Send to parent'}
+          </button>
+        )}
+      </div>
+    </div>
   );
 };
 
