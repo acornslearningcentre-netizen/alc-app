@@ -5,7 +5,7 @@ import React, { useEffect, useState } from 'react';
 import { Icon } from '../../../../components/ui';
 import { intakeQuestions, type IntakeAnswerValue } from '../../../../data/intake-questions';
 import {
-  getProspect, updateProspectStatus,
+  getProspect, updateProspectStatus, bookAssessment,
   type ProspectDetail as ProspectDetailData, type ProspectStatus,
 } from '../../../../lib/onboarding-api';
 
@@ -152,12 +152,13 @@ export const ProspectDetail: React.FC<{ id: number; onBack: () => void }> = ({ i
       <div className="grid grid-2" style={{ gap: 16 }}>
         <div className="card">
           <h3 style={{ marginBottom: 12 }}>Assessments</h3>
-          {data.assessments.length === 0 && <div className="muted" style={{ fontSize: 13 }}>None booked yet.</div>}
+          {data.assessments.length === 0 && <div className="muted" style={{ fontSize: 13, marginBottom: 12 }}>None booked yet.</div>}
           {data.assessments.map((a) => (
             <div key={a.id} style={{ padding: '8px 0', borderBottom: '1px dashed var(--line)', fontSize: 13 }}>
               {a.scheduled_for ? new Date(a.scheduled_for).toLocaleString() : 'No time set'} · <span className="chip" style={{ fontSize: 11 }}>{a.status}</span>
             </div>
           ))}
+          <BookAssessmentForm prospectId={id} onBooked={load}/>
         </div>
         <div className="card">
           <h3 style={{ marginBottom: 12 }}>Observations</h3>
@@ -170,6 +171,65 @@ export const ProspectDetail: React.FC<{ id: number; onBack: () => void }> = ({ i
         </div>
       </div>
     </div>
+  );
+};
+
+// SCRUM-92 — book an assessment: pick a date/time (and, until the
+// Classroom Roster epic ships a real teacher list, a free-text name)
+// and it's booked. No database IDs, no technical detail.
+const BookAssessmentForm: React.FC<{ prospectId: number; onBooked: () => void }> = ({ prospectId, onBooked }) => {
+  const [when, setWhen] = useState('');
+  const [teacher, setTeacher] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!when) return;
+    setError(null);
+    setSaving(true);
+    try {
+      await bookAssessment({
+        prospect_id: prospectId,
+        scheduled_for: new Date(when).toISOString(),
+        teacher_id: teacher.trim() || undefined,
+      });
+      setWhen('');
+      setTeacher('');
+      onBooked();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not book the assessment.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <form onSubmit={submit} style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <div className="tiny">Book a visit</div>
+      <input
+        type="datetime-local"
+        required
+        value={when}
+        onChange={(e) => setWhen(e.target.value)}
+        aria-label="Assessment date and time"
+        className="v2-text-input"
+        style={{ padding: '10px 12px', fontSize: 13 }}
+      />
+      <input
+        type="text"
+        value={teacher}
+        onChange={(e) => setTeacher(e.target.value)}
+        placeholder="Staff member running it (optional)"
+        aria-label="Staff member"
+        className="v2-text-input"
+        style={{ padding: '10px 12px', fontSize: 13 }}
+      />
+      {error && <div className="v2-login-error">{error}</div>}
+      <button type="submit" className="btn primary" disabled={saving} style={{ justifyContent: 'center' }}>
+        {saving ? 'Booking…' : 'Book assessment'}
+      </button>
+    </form>
   );
 };
 
