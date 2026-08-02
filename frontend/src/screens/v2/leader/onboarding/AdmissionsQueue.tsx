@@ -3,7 +3,7 @@
 // public intake form shipped but nothing has ever displayed it.
 import React, { useEffect, useState } from 'react';
 import { Icon } from '../../../../components/ui';
-import { listProspects, type Prospect, type ProspectStatus } from '../../../../lib/onboarding-api';
+import { listProspects, listAssessments, type Prospect, type Assessment, type ProspectStatus } from '../../../../lib/onboarding-api';
 
 type Filter = 'all' | ProspectStatus;
 
@@ -37,6 +37,8 @@ export const AdmissionsQueue: React.FC<{ onOpen: (id: number) => void }> = ({ on
   const [prospects, setProspects] = useState<Prospect[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<Filter>('all');
+  const [upcoming, setUpcoming] = useState<Assessment[]>([]);
+  const [namesById, setNamesById] = useState<Record<number, string>>({});
 
   useEffect(() => {
     let cancelled = false;
@@ -46,6 +48,24 @@ export const AdmissionsQueue: React.FC<{ onOpen: (id: number) => void }> = ({ on
       .catch((err) => { if (!cancelled) setError(err instanceof Error ? err.message : 'Could not load families.'); });
     return () => { cancelled = true; };
   }, [filter]);
+
+  // Upcoming assessments across every family — SCRUM-92, so staff don't
+  // have to open each prospect individually to see who's booked when.
+  useEffect(() => {
+    let cancelled = false;
+    Promise.all([listAssessments('scheduled'), listProspects()])
+      .then(([assessments, allProspects]) => {
+        if (cancelled) return;
+        const future = assessments
+          .filter((a) => a.scheduled_for && new Date(a.scheduled_for) >= new Date())
+          .sort((a, b) => new Date(a.scheduled_for!).getTime() - new Date(b.scheduled_for!).getTime())
+          .slice(0, 5);
+        setUpcoming(future);
+        setNamesById(Object.fromEntries(allProspects.map((p) => [p.id, p.child_first_name || p.parent_name || p.parent_email])));
+      })
+      .catch(() => { /* non-critical — the main list still works without this */ });
+    return () => { cancelled = true; };
+  }, []);
 
   const filters: { key: Filter; label: string }[] = [
     { key: 'all', label: 'All' },
@@ -64,6 +84,29 @@ export const AdmissionsQueue: React.FC<{ onOpen: (id: number) => void }> = ({ on
           <div className="sub">Every family who's applied, most recent first</div>
         </div>
       </div>
+
+      {upcoming.length > 0 && (
+        <div className="card" style={{ marginBottom: 16 }}>
+          <h3 style={{ marginBottom: 12 }}>Upcoming visits</h3>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {upcoming.map((a) => (
+              <button
+                key={a.id}
+                onClick={() => onOpen(a.prospect_id)}
+                className="row between"
+                style={{ width: '100%', textAlign: 'left', background: 'none', border: 'none', cursor: 'pointer', padding: '6px 0', fontSize: 13 }}
+              >
+                <span>
+                  <strong>{namesById[a.prospect_id] || `Family #${a.prospect_id}`}</strong>
+                  {' · '}{new Date(a.scheduled_for!).toLocaleString(undefined, { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                  {a.teacher_id ? ` · ${a.teacher_id}` : ''}
+                </span>
+                <Icon name="arrow-right" size={13} stroke="var(--ink-3)"/>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="row" style={{ gap: 8, marginBottom: 16, flexWrap: 'wrap' }} role="tablist" aria-label="Filter by status">
         {filters.map((f) => (

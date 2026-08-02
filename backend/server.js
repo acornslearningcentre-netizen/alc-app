@@ -596,6 +596,20 @@ app.patch('/api/prospects/:id', ah(async (req, res) => {
 }));
 
 // ── /api/assessments ────────────────────────────────────────────────────────
+// Added for SCRUM-92 (Book an assessment) — staff need to see upcoming
+// assessments across every family in one place, not by opening each
+// prospect's page individually.
+app.get('/api/assessments', ah(async (req, res) => {
+  const status = cleanAssessmentStatus(req.query.status);
+  if (req.query.status !== undefined && !status) {
+    return res.status(400).json({ error: `status must be one of: ${[...ASSESSMENT_STATUSES].join(', ')}` });
+  }
+  const { rows } = status
+    ? await pool.query('SELECT * FROM assessments WHERE status = $1 ORDER BY scheduled_for ASC NULLS LAST', [status])
+    : await pool.query('SELECT * FROM assessments ORDER BY scheduled_for ASC NULLS LAST LIMIT 100');
+  res.json(rows);
+}));
+
 app.post('/api/assessments', ah(async (req, res) => {
   const { prospect_id, scheduled_for, teacher_id } = req.body ?? {};
   const pid = Number(prospect_id);

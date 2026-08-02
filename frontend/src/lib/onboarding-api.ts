@@ -77,6 +77,9 @@ export const updateProspectStatus = (id: number, status: ProspectStatus): Promis
     body: JSON.stringify({ status }),
   }).then(asJson<Prospect>);
 
+export const listAssessments = (status?: Assessment['status']): Promise<Assessment[]> =>
+  fetch(apiUrl(`/api/assessments${status ? `?status=${status}` : ''}`)).then(asJson<Assessment[]>);
+
 export const bookAssessment = (input: { prospect_id: number; scheduled_for: string; teacher_id?: string }): Promise<Assessment> =>
   fetch(apiUrl('/api/assessments'), {
     method: 'POST',
