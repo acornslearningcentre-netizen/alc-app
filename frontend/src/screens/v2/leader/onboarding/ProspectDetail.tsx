@@ -6,8 +6,8 @@ import { Icon } from '../../../../components/ui';
 import { intakeQuestions, type IntakeAnswerValue } from '../../../../data/intake-questions';
 import {
   getProspect, updateProspectStatus, bookAssessment,
-  updateAssessmentDraft, signOffAssessment, sendAssessment,
-  type ProspectDetail as ProspectDetailData, type ProspectStatus, type Assessment,
+  updateAssessmentDraft, signOffAssessment, sendAssessment, createObservation,
+  type ProspectDetail as ProspectDetailData, type ProspectStatus, type Assessment, type Observation,
 } from '../../../../lib/onboarding-api';
 
 const STATUS_OPTIONS: ProspectStatus[] = ['prospect', 'booked', 'assessed', 'enrolled', 'declined'];
@@ -59,6 +59,10 @@ export const ProspectDetail: React.FC<{ id: number; onBack: () => void }> = ({ i
       ...prev,
       assessments: prev.assessments.map((a) => (a.id === updated.id ? updated : a)),
     });
+  };
+
+  const addObservation = (created: Observation) => {
+    setData((prev) => prev && { ...prev, observations: [created, ...prev.observations] });
   };
 
   if (error) {
@@ -172,13 +176,14 @@ export const ProspectDetail: React.FC<{ id: number; onBack: () => void }> = ({ i
           <BookAssessmentForm prospectId={id} onBooked={load}/>
         </div>
         <div className="card">
-          <h3 style={{ marginBottom: 12 }}>Observations</h3>
-          {data.observations.length === 0 && <div className="muted" style={{ fontSize: 13 }}>None captured yet.</div>}
+          <h3 style={{ marginBottom: 12 }}>Observations from this family's visit</h3>
+          {data.observations.length === 0 && <div className="muted" style={{ fontSize: 13, marginBottom: 12 }}>None captured yet.</div>}
           {data.observations.map((o) => (
             <div key={o.id} style={{ padding: '8px 0', borderBottom: '1px dashed var(--line)', fontSize: 13 }}>
-              <span className="chip" style={{ fontSize: 11 }}>{o.kind}</span> {o.comment || o.transcript || ''}
+              <span className="chip" style={{ fontSize: 11 }}>{o.kind}</span> {o.comment || o.transcript || o.media_url || ''}
             </div>
           ))}
+          <CaptureObservationForm prospectId={id} onAdded={addObservation}/>
         </div>
       </div>
     </div>
@@ -352,6 +357,97 @@ const ReportPanel: React.FC<{ assessment: Assessment; onChange: (updated: Assess
         )}
       </div>
     </div>
+  );
+};
+
+// SCRUM-94 — capture an observation during a family's assessment visit.
+// Deliberately separate from the classroom "Capture an observation" screen,
+// which writes to already-enrolled children's local mock data — this one
+// saves for real against a prospect_id, before the child is enrolled.
+type ObservationKind = Observation['kind'];
+const KIND_OPTIONS: { key: ObservationKind; label: string }[] = [
+  { key: 'text', label: 'Written note' },
+  { key: 'image', label: 'Photo' },
+  { key: 'voice', label: 'Voice note' },
+];
+
+const CaptureObservationForm: React.FC<{ prospectId: number; onAdded: (o: Observation) => void }> = ({ prospectId, onAdded }) => {
+  const [kind, setKind] = useState<ObservationKind>('text');
+  const [comment, setComment] = useState('');
+  const [mediaUrl, setMediaUrl] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  const needsMediaUrl = kind === 'image' || kind === 'voice';
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (needsMediaUrl && !mediaUrl.trim()) return;
+    if (!needsMediaUrl && !comment.trim()) return;
+    setError(null);
+    setSaving(true);
+    try {
+      const created = await createObservation({
+        prospect_id: prospectId,
+        kind,
+        comment: comment.trim() || undefined,
+        media_url: needsMediaUrl ? mediaUrl.trim() : undefined,
+      });
+      setComment('');
+      setMediaUrl('');
+      onAdded(created);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not save this observation.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <form onSubmit={submit} style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <div className="tiny">Capture an observation from this visit</div>
+      <div className="row" style={{ gap: 6, flexWrap: 'wrap' }} role="tablist" aria-label="Observation type">
+        {KIND_OPTIONS.map((k) => (
+          <button
+            key={k.key}
+            type="button"
+            role="tab"
+            aria-selected={kind === k.key}
+            className={`btn ${kind === k.key ? 'primary' : ''}`}
+            onClick={() => setKind(k.key)}
+            style={{ fontSize: 12.5, padding: '6px 12px' }}
+          >
+            {k.label}
+          </button>
+        ))}
+      </div>
+      {needsMediaUrl && (
+        <input
+          type="url"
+          required
+          value={mediaUrl}
+          onChange={(e) => setMediaUrl(e.target.value)}
+          placeholder={kind === 'image' ? 'Link to the photo' : 'Link to the voice recording'}
+          aria-label="Media link"
+          className="v2-text-input"
+          style={{ padding: '10px 12px', fontSize: 13 }}
+        />
+      )}
+      <textarea
+        value={comment}
+        onChange={(e) => setComment(e.target.value)}
+        placeholder={needsMediaUrl ? 'Add a note about this (optional)' : 'What did you notice?'}
+        required={!needsMediaUrl}
+        rows={3}
+        aria-label="Observation note"
+        className="v2-text-input"
+        style={{ padding: '10px 12px', fontSize: 13, fontFamily: 'inherit', resize: 'vertical' }}
+      />
+      {error && <div className="v2-login-error">{error}</div>}
+      <button type="submit" className="btn primary" disabled={saving} style={{ justifyContent: 'center' }}>
+        {saving ? 'Saving…' : 'Save observation'}
+      </button>
+    </form>
   );
 };
 
