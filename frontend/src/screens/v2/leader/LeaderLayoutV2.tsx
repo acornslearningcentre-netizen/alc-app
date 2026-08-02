@@ -6,16 +6,18 @@ import { LeaderCohorts } from '../../leader/LeaderCohorts';
 import { LeaderTeachers } from '../../leader/LeaderTeachers';
 import { LeaderPatterns } from '../../leader/LeaderPatterns';
 import { LeaderOutcomes } from '../../leader/LeaderOutcomes';
+import { AdmissionsView } from './onboarding/AdmissionsView';
 import '../../../styles/v2/teacher-today.css';
 
-type LView = 'dashboard' | 'cohorts' | 'teachers' | 'patterns' | 'outcomes';
+type LView = 'dashboard' | 'admissions' | 'cohorts' | 'teachers' | 'patterns' | 'outcomes';
 
 export const LeaderLayoutV2: React.FC = () => {
   const { logout } = useAppStore();
   const [view, setView] = useState<LView>('dashboard');
 
   const nav: { key: LView; icon: React.ComponentProps<typeof Icon>['name']; label: string; dot?: string }[] = [
-    { key: 'dashboard', icon: 'home',  label: 'Today' },
+    { key: 'dashboard',  icon: 'home',  label: 'Today' },
+    { key: 'admissions', icon: 'heart', label: 'Admissions' },
     { key: 'cohorts',   icon: 'users', label: 'Cohorts' },
     { key: 'teachers',  icon: 'star',  label: 'Teachers' },
     { key: 'patterns',  icon: 'flag',  label: 'Patterns', dot: '4' },
@@ -57,6 +59,7 @@ export const LeaderLayoutV2: React.FC = () => {
       <main>
         <div className="v2-content">
           {view === 'dashboard' && <LeaderToday/>}
+          {view === 'admissions' && <AdmissionsView/>}
           {view === 'cohorts' && <LeaderCohorts/>}
           {view === 'teachers' && <LeaderTeachers/>}
           {view === 'patterns' && <LeaderPatterns/>}
