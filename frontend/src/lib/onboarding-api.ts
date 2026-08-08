@@ -94,6 +94,22 @@ export const updateAssessmentDraft = (id: number, report_draft: string): Promise
     body: JSON.stringify({ report_draft }),
   }).then(asJson<Assessment>);
 
+/** Throws with a `needsConfirmation: true` marker on 409 (an existing draft would be overwritten). */
+export const generateDraftReport = async (id: number, confirm = false): Promise<Assessment> => {
+  const res = await fetch(apiUrl(`/api/assessments/${id}/draft-report`), {
+    method: 'POST',
+    headers: jsonHeaders,
+    body: JSON.stringify({ confirm }),
+  });
+  if (res.status === 409) {
+    const body = await res.json().catch(() => ({}));
+    const err = new Error(body.error || 'A draft already exists.') as Error & { needsConfirmation: true };
+    err.needsConfirmation = true;
+    throw err;
+  }
+  return asJson<Assessment>(res);
+};
+
 export const signOffAssessment = (id: number): Promise<Assessment> =>
   fetch(apiUrl(`/api/assessments/${id}/sign-off`), { method: 'POST' }).then(asJson<Assessment>);
 

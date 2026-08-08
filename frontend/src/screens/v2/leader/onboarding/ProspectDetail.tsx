@@ -6,7 +6,7 @@ import { Icon } from '../../../../components/ui';
 import { intakeQuestions, type IntakeAnswerValue } from '../../../../data/intake-questions';
 import {
   getProspect, updateProspectStatus, bookAssessment,
-  updateAssessmentDraft, signOffAssessment, sendAssessment, createObservation,
+  updateAssessmentDraft, signOffAssessment, sendAssessment, createObservation, generateDraftReport,
   type ProspectDetail as ProspectDetailData, type ProspectStatus, type Assessment, type Observation,
 } from '../../../../lib/onboarding-api';
 
@@ -256,7 +256,7 @@ const BookAssessmentForm: React.FC<{ prospectId: number; onBooked: () => void }>
 const ReportPanel: React.FC<{ assessment: Assessment; onChange: (updated: Assessment) => void }> = ({ assessment, onChange }) => {
   const [draft, setDraft] = useState(assessment.report_draft ?? '');
   const [error, setError] = useState<string | null>(null);
-  const [saving, setSaving] = useState<'draft' | 'sign-off' | 'send' | null>(null);
+  const [saving, setSaving] = useState<'draft' | 'sign-off' | 'send' | 'generate' | null>(null);
 
   const signedOff = Boolean(assessment.report_signed_off_at);
   const sent = Boolean(assessment.sent_to_parent_at);
@@ -269,6 +269,27 @@ const ReportPanel: React.FC<{ assessment: Assessment; onChange: (updated: Assess
       onChange(await updateAssessmentDraft(assessment.id, draft));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not save the draft.');
+    } finally {
+      setSaving(null);
+    }
+  };
+
+  const doGenerate = async (confirm = false) => {
+    setError(null);
+    setSaving('generate');
+    try {
+      const updated = await generateDraftReport(assessment.id, confirm);
+      setDraft(updated.report_draft ?? '');
+      onChange(updated);
+    } catch (err) {
+      if (err && typeof err === 'object' && 'needsConfirmation' in err) {
+        setSaving(null);
+        if (window.confirm('This will replace the current draft. Overwrite it?')) {
+          await doGenerate(true);
+        }
+        return;
+      }
+      setError(err instanceof Error ? err.message : 'Could not generate a draft.');
     } finally {
       setSaving(null);
     }
@@ -322,6 +343,17 @@ const ReportPanel: React.FC<{ assessment: Assessment; onChange: (updated: Assess
       ) : null}
       {error && <div className="v2-login-error">{error}</div>}
       <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
+        {!signedOff && (
+          <button
+            type="button"
+            className="btn"
+            disabled={saving !== null}
+            onClick={() => doGenerate(false)}
+            style={{ fontSize: 12.5, padding: '6px 12px' }}
+          >
+            {saving === 'generate' ? 'Generating…' : <><Icon name="sparkle" size={11}/> Generate draft</>}
+          </button>
+        )}
         {!signedOff && (
           <button
             type="button"
