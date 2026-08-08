@@ -16,6 +16,7 @@ import {
   cleanProspectStatus, cleanAssessmentStatus, cleanObservationKind,
   parsePositiveIntId, parseCorsOrigins,
 } from './lib/validators.js';
+import { composeDraftReport } from './lib/report-draft.js';
 
 const { Pool } = pg;
 const PORT = Number(process.env.PORT) || 3000;
@@ -662,6 +663,41 @@ app.patch('/api/assessments/:id', ah(async (req, res) => {
       nowIso(),
       id,
     ],
+  );
+  res.json(row);
+}));
+
+// SCRUM-84 — generates a first draft from real intake answers + real
+// observations (template-based composer, see lib/report-draft.js). Never
+// signs off or sends. If a draft already exists and differs from the
+// freshly-generated one, requires confirm:true so a staff member's edits
+// are never silently overwritten. Signed-off reports are final — the AI
+// draft can't touch them.
+app.post('/api/assessments/:id/draft-report', ah(async (req, res) => {
+  const id = idParam(req, res); if (!id) return;
+  const existing = await getAssessment(id);
+  if (!existing) return res.status(404).json({ error: 'not found' });
+  if (existing.report_signed_off_at) return res.status(409).json({ error: 'this report is already signed off and final' });
+
+  const prospect = await getProspect(existing.prospect_id);
+  if (!prospect) return res.status(404).json({ error: 'prospect not found' });
+
+  const { rows: [intakeRow] } = await pool.query('SELECT answers FROM intake_responses WHERE prospect_id = $1', [prospect.id]);
+  const answers = intakeRow ? JSON.parse(intakeRow.answers) : {};
+  const { rows: observations } = await pool.query('SELECT * FROM observations WHERE prospect_id = $1 ORDER BY captured_at ASC', [prospect.id]);
+
+  const draft = composeDraftReport(prospect, answers, observations);
+
+  const hasExistingDraft = Boolean(trim(existing.report_draft));
+  const confirm = toBool(req.body?.confirm);
+  if (hasExistingDraft && existing.report_draft !== draft && !confirm) {
+    return res.status(409).json({ error: 'A draft already exists for this assessment. Confirm to overwrite it.' });
+  }
+
+  const ts = nowIso();
+  const { rows: [row] } = await pool.query(
+    'UPDATE assessments SET report_draft = $1, updated_at = $2 WHERE id = $3 RETURNING *',
+    [draft, ts, id],
   );
   res.json(row);
 }));
