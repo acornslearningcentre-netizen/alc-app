@@ -128,3 +128,19 @@ export const createObservation = (input: {
     headers: jsonHeaders,
     body: JSON.stringify(input),
   }).then(asJson<Observation>);
+
+export interface UploadedMedia {
+  url: string;
+  mime_type: string;
+  size_bytes: number;
+}
+
+/** Uploads a real photo/video/voice-recording file — SCRUM-87. Returns the address to save on the observation. */
+export const uploadMedia = (file: File): Promise<UploadedMedia> => {
+  const body = new FormData();
+  body.append('file', file);
+  return fetch(apiUrl('/api/media/upload'), { method: 'POST', body }).then(asJson<UploadedMedia>);
+};
+
+/** Resolves an observation's media_url for display — backend uploads are host-relative, old manually-typed links are already absolute. */
+export const mediaUrl = (url: string): string => (url.startsWith('/') ? apiUrl(url) : url);
