@@ -1,0 +1,3 @@
+# Local dev media uploads (SCRUM-87). Railway uses a mounted /data volume
+# instead — see DATA_DIR in server.js.
+/data/

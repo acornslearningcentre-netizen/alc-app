@@ -5,8 +5,12 @@
 //   - /api/intake, /api/prospects/*, /api/assessments/*, /api/observations/*
 //     — onboarding journey (Epic B onwards)
 //   - /api/auth/*      — real login/session backend (SCRUM-16, Sprint 1)
+import fs from 'fs';
+import path from 'path';
+import crypto from 'crypto';
 import express from 'express';
 import cors from 'cors';
+import multer from 'multer';
 import pg from 'pg';
 import { hashPassword, verifyPassword, hashPasscode, genToken, publicUser } from './lib/auth.js';
 import { createAttemptThrottle } from './lib/throttle.js';
@@ -17,9 +21,17 @@ import {
   parsePositiveIntId, parseCorsOrigins,
 } from './lib/validators.js';
 import { composeDraftReport } from './lib/report-draft.js';
+import { isAllowedMimeType, extensionFor, MAX_UPLOAD_BYTES } from './lib/media.js';
 
 const { Pool } = pg;
 const PORT = Number(process.env.PORT) || 3000;
+
+// SCRUM-87 — uploaded media (photos/videos/voice recordings) lands here.
+// Defaults to the Railway volume mount when one is attached (persists across
+// deploys); falls back to a local folder for dev, where persistence doesn't matter.
+const DATA_DIR = process.env.DATA_DIR || process.env.RAILWAY_VOLUME_MOUNT_PATH || path.join(process.cwd(), 'data');
+const MEDIA_DIR = path.join(DATA_DIR, 'media');
+fs.mkdirSync(MEDIA_DIR, { recursive: true });
 
 if (!process.env.DATABASE_URL) {
   throw new Error('DATABASE_URL is not set — link the Postgres service and set it as an env var.');
@@ -288,6 +300,10 @@ const corsOrigins = parseCorsOrigins(process.env.CORS_ORIGIN);
 app.use(cors({ origin: corsOrigins.length > 0 ? corsOrigins : true }));
 
 app.use(express.json({ limit: '64kb' }));
+
+// Serves uploaded observation media back out (SCRUM-87) — this is serving
+// user-uploaded assets, not the frontend SPA (that stays static-server.js's job).
+app.use('/media', express.static(MEDIA_DIR));
 
 // ── API ──────────────────────────────────────────────────────────────────────
 const idParam = (req, res) => {
@@ -742,6 +758,40 @@ app.post('/api/assessments/:id/send', ah(async (req, res) => {
   });
   res.json(row);
 }));
+
+// ── /api/media ───────────────────────────────────────────────────────────────
+// SCRUM-87 — real file upload for observations (photo/video/voice recording),
+// replacing the free-text media_url field. Returns a /media/<file> address
+// the observation can be saved with and reopened from later.
+const upload = multer({
+  storage: multer.diskStorage({
+    destination: (_req, _file, cb) => cb(null, MEDIA_DIR),
+    filename: (_req, file, cb) => cb(null, `${crypto.randomUUID()}${extensionFor(file.mimetype, file.originalname)}`),
+  }),
+  limits: { fileSize: MAX_UPLOAD_BYTES },
+  fileFilter: (_req, file, cb) => {
+    if (!isAllowedMimeType(file.mimetype)) {
+      return cb(new Error(`Unsupported file type (${file.mimetype || 'unknown'}) — only images, videos, and audio recordings are accepted.`));
+    }
+    cb(null, true);
+  },
+});
+
+app.post('/api/media/upload', (req, res) => {
+  upload.single('file')(req, res, (err) => {
+    if (err instanceof multer.MulterError && err.code === 'LIMIT_FILE_SIZE') {
+      return res.status(400).json({ error: `File is too large — max ${Math.floor(MAX_UPLOAD_BYTES / (1024 * 1024))}MB.` });
+    }
+    if (err) return res.status(400).json({ error: err.message || 'Upload failed.' });
+    if (!req.file) return res.status(400).json({ error: 'file is required' });
+
+    res.status(201).json({
+      url: `/media/${req.file.filename}`,
+      mime_type: req.file.mimetype,
+      size_bytes: req.file.size,
+    });
+  });
+});
 
 // ── /api/observations ───────────────────────────────────────────────────────
 app.get('/api/observations', ah(async (req, res) => {
