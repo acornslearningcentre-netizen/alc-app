@@ -200,6 +200,8 @@ Three services in one Railway project (`alc-app`), all sharing the same repo/bra
 - `CORS_ORIGIN` on **alc-app-backend** must list the frontend's live domain(s), comma-separated — the frontend calls the API cross-origin now. Falls back to reflecting any origin (permissive) if unset, so don't leave it unset in production.
 - `VITE_API_BASE_URL` on **alc-app-frontend** must point at the backend's URL — it's baked in at build time, so changing it means a rebuild, not just a restart.
 - `DATABASE_URL` on **alc-app-backend** references the Postgres plugin (`${{Postgres.DATABASE_URL}}`) — set once via `railway variables`, don't hardcode a connection string.
+- `RESEND_API_KEY` on **alc-app-backend** — required for `POST /api/assessments/:id/send` (SCRUM-88) to actually email the parent. Without it, that endpoint fails clearly (502, "Email sending is not configured") rather than the app crashing on boot. `EMAIL_FROM` is optional (defaults to Resend's sandbox `onboarding@resend.dev`) — set it to a verified sending address once one exists on the Resend account.
+- `DATA_DIR` on **alc-app-backend** is optional — uploaded media (SCRUM-87) defaults to `RAILWAY_VOLUME_MOUNT_PATH` (the attached volume) when set, so it survives redeploys without any extra config.
 - To force/re-trigger a deploy manually:
   ```bash
   railway link --project alc-app                    # interactive — answer prompts once, only needed the first time

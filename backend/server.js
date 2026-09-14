@@ -22,6 +22,7 @@ import {
 } from './lib/validators.js';
 import { composeDraftReport } from './lib/report-draft.js';
 import { isAllowedMimeType, extensionFor, MAX_UPLOAD_BYTES } from './lib/media.js';
+import { sendReportEmail } from './lib/report-email.js';
 
 const { Pool } = pg;
 const PORT = Number(process.env.PORT) || 3000;
@@ -738,6 +739,9 @@ app.post('/api/assessments/:id/sign-off', ah(async (req, res) => {
   res.json(row);
 }));
 
+// SCRUM-88 — sends the signed-off report to the parent by real email
+// (Resend). If the email genuinely fails, the assessment is NOT marked
+// sent — the staff member sees the real error instead of a false "sent".
 app.post('/api/assessments/:id/send', ah(async (req, res) => {
   const id = idParam(req, res); if (!id) return;
   const existing = await getAssessment(id);
@@ -745,8 +749,21 @@ app.post('/api/assessments/:id/send', ah(async (req, res) => {
   if (!existing.report_signed_off_at) return res.status(409).json({ error: 'sign off the report before sending' });
   if (existing.sent_to_parent_at) return res.status(409).json({ error: 'already sent' });
 
-  // NOTE: actual email send happens in F5 (Sign-off + send). For now we just
-  // persist the timestamp and bump the prospect's status to 'assessed'.
+  const prospect = await getProspect(existing.prospect_id);
+  if (!prospect) return res.status(404).json({ error: 'prospect not found' });
+
+  try {
+    await sendReportEmail({
+      to: prospect.parent_email,
+      parentName: prospect.parent_name,
+      childFirstName: prospect.child_first_name,
+      reportText: existing.report_draft,
+    });
+  } catch (err) {
+    console.error(`POST /api/assessments/${id}/send — email failed:`, err);
+    return res.status(502).json({ error: `Could not send the email: ${err.message}` });
+  }
+
   const row = await withTransaction(async (client) => {
     const ts = nowIso();
     const { rows: [updated] } = await client.query(
