@@ -172,6 +172,47 @@ async function migrate() {
     CREATE INDEX IF NOT EXISTS idx_observations_kind     ON observations(kind);
     CREATE INDEX IF NOT EXISTS idx_observations_captured ON observations(captured_at DESC);
 
+    -- Classroom Roster (SCRUM-22/23): real children/teachers/parents records,
+    -- replacing the fixed demo list baked into the frontend. Linking an auth
+    -- user (users.teacher_id) to a real teachers.id row is Sprint 6's job
+    -- (User Provisioning, SCRUM-95) — until then, teacher accounts see an
+    -- empty roster rather than someone else's class, which is the correct
+    -- (not broken) default.
+    CREATE TABLE IF NOT EXISTS teachers (
+      id         SERIAL PRIMARY KEY,
+      name       TEXT NOT NULL,
+      email      TEXT UNIQUE,
+      created_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS children (
+      id          SERIAL PRIMARY KEY,
+      name        TEXT NOT NULL,
+      dob         TEXT,                              -- ISO date; age is derived
+      initials    TEXT,
+      tone        TEXT CHECK (tone IN ('sage','ochre','plum','sky')),
+      teacher_id  INTEGER REFERENCES teachers(id),
+      pronoun     TEXT CHECK (pronoun IN ('he','she','they')),
+      focus       TEXT,                              -- JSON array of strings
+      strengths   TEXT,                              -- JSON array of strings
+      gaps        TEXT,                              -- JSON array of strings
+      style       TEXT,
+      flags       TEXT,                              -- JSON array of strings
+      prospect_id INTEGER REFERENCES prospects(id),  -- kept if this child enrolled from onboarding
+      created_at  TEXT NOT NULL,
+      updated_at  TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_children_teacher  ON children(teacher_id);
+    CREATE INDEX IF NOT EXISTS idx_children_prospect ON children(prospect_id);
+
+    CREATE TABLE IF NOT EXISTS parents (
+      id       SERIAL PRIMARY KEY,
+      child_id INTEGER NOT NULL REFERENCES children(id) ON DELETE CASCADE,
+      name     TEXT NOT NULL,
+      relation TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_parents_child ON parents(child_id);
+
     -- Auth (SCRUM-16 / SCRUM-17): real accounts and sessions, replacing the
     -- passcode-in-the-frontend-bundle login. Staff (teacher/leader) sign in
     -- with email+password; parent/student sign in with a short passcode.
