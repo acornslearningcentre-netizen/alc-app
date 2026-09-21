@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseJsonArray, parseChildRow, toJsonArrayColumn } from './children.js';
+import { parseJsonArray, parseChildRow, toJsonArrayColumn, canSeeChild } from './children.js';
 
 describe('parseJsonArray', () => {
   it('parses a JSON array string', () => {
@@ -37,5 +37,21 @@ describe('toJsonArrayColumn', () => {
     expect(toJsonArrayColumn(undefined)).toBe('[]');
     expect(toJsonArrayColumn(null)).toBe('[]');
     expect(toJsonArrayColumn('not an array')).toBe('[]');
+  });
+});
+
+describe('canSeeChild', () => {
+  it('lets a leader see any child', () => {
+    expect(canSeeChild('leader', null, 5)).toBe(true);
+    expect(canSeeChild('leader', 3, 5)).toBe(true);
+  });
+  it('lets a teacher see a child in their own class', () => {
+    expect(canSeeChild('teacher', 3, 3)).toBe(true);
+  });
+  it('blocks a teacher from a child outside their class', () => {
+    expect(canSeeChild('teacher', 3, 7)).toBe(false);
+  });
+  it('blocks an unlinked teacher (null teacher_id) even against an unassigned child', () => {
+    expect(canSeeChild('teacher', null, null)).toBe(false);
   });
 });

@@ -24,7 +24,7 @@ import {
 import { composeDraftReport } from './lib/report-draft.js';
 import { isAllowedMimeType, extensionFor, MAX_UPLOAD_BYTES } from './lib/media.js';
 import { sendReportEmail } from './lib/report-email.js';
-import { parseChildRow, toJsonArrayColumn } from './lib/children.js';
+import { parseChildRow, toJsonArrayColumn, canSeeChild } from './lib/children.js';
 
 const { Pool } = pg;
 const PORT = Number(process.env.PORT) || 3000;
@@ -970,6 +970,23 @@ app.post('/api/children', requireAuth, requireRole('leader'), ah(async (req, res
     return child;
   });
   res.status(201).json(parseChildRow(row));
+}));
+
+const getChild = async (id) => {
+  const { rows: [row] } = await pool.query('SELECT * FROM children WHERE id = $1', [id]);
+  return row ?? null;
+};
+
+// SCRUM-26 — one child's full profile, including their parent/carer contacts.
+app.get('/api/children/:id', requireAuth, requireRole('teacher', 'leader'), ah(async (req, res) => {
+  const id = idParam(req, res); if (!id) return;
+  const child = await getChild(id);
+  if (!child || !canSeeChild(req.user.role, parsePositiveIntId(req.user.teacher_id), child.teacher_id)) {
+    return res.status(404).json({ error: 'not found' });
+  }
+
+  const { rows: parents } = await pool.query('SELECT * FROM parents WHERE child_id = $1 ORDER BY id', [id]);
+  res.json({ ...parseChildRow(child), parents });
 }));
 
 app.get('/api/health', ah(async (_req, res) => {
