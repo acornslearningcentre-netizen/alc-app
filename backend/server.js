@@ -1390,6 +1390,56 @@ app.post('/api/flow', requireAuth, requireRole('teacher', 'leader'), ah(async (r
   res.status(201).json(row);
 }));
 
+// SCRUM-34 — updates a step, most commonly marking it done/now. Same 404-not-
+// 403 permission rule as the children endpoints (canSeeFlowStep). date and
+// teacher_id are deliberately not patchable fields at all — there's no way
+// to move a step to a different teacher or a different day through this
+// endpoint, which is the strongest form of "rejected" for that case.
+app.patch('/api/flow/:id', requireAuth, requireRole('teacher', 'leader'), ah(async (req, res) => {
+  const id = idParam(req, res); if (!id) return;
+  const { rows: [existing] } = await pool.query('SELECT * FROM daily_flow_steps WHERE id = $1', [id]);
+  if (!existing || !canSeeFlowStep(req.user.role, parsePositiveIntId(req.user.teacher_id), existing.teacher_id)) {
+    return res.status(404).json({ error: 'not found' });
+  }
+  const b = req.body ?? {};
+
+  let time = existing.time;
+  if (b.time !== undefined) {
+    if (!isTimeHHMM(b.time)) return res.status(400).json({ error: 'time must be HH:MM (24hr)' });
+    time = trim(b.time);
+  }
+  let label = existing.label;
+  if (b.label !== undefined) {
+    label = trim(b.label);
+    if (!label) return res.status(400).json({ error: 'label cannot be empty' });
+  }
+  let state = existing.state;
+  if (b.state !== undefined) {
+    state = cleanFlowState(b.state);
+    if (!state) return res.status(400).json({ error: 'invalid state' });
+  }
+
+  const { rows: [row] } = await pool.query(
+    `UPDATE daily_flow_steps SET
+      time         = $1,
+      label        = $2,
+      state        = $3,
+      ai_suggested = $4,
+      sort_order   = $5
+    WHERE id = $6
+    RETURNING *`,
+    [
+      time,
+      label,
+      state,
+      b.ai_suggested !== undefined ? toBool(b.ai_suggested) : existing.ai_suggested,
+      Number.isInteger(b.sort_order) ? b.sort_order : existing.sort_order,
+      id,
+    ],
+  );
+  res.json(row);
+}));
+
 app.get('/api/health', ah(async (_req, res) => {
   await pool.query('SELECT 1');
   res.json({ ok: true });
