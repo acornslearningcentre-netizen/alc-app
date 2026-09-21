@@ -1057,8 +1057,13 @@ app.get('/api/observations', ah(async (req, res) => {
   res.json(rows.map(parseObservationRow));
 }));
 
+// SCRUM-38 — extends the existing (SCRUM-94) endpoint: child_id, when given,
+// must now reference a real roster child (previously an unvalidated opaque
+// string), plus optional tags/mood. prospect_id-only observations (the
+// pre-enrolment flow) are untouched — this doesn't force every observation
+// to have a child.
 app.post('/api/observations', ah(async (req, res) => {
-  const { prospect_id, child_id, teacher_id, kind, media_url, transcript, comment } = req.body ?? {};
+  const { prospect_id, child_id, teacher_id, kind, media_url, transcript, comment, tags, mood } = req.body ?? {};
   const k = cleanObservationKind(kind);
   if (!k) return res.status(400).json({ error: `kind must be one of: ${[...OBSERVATION_KINDS].join(', ')}` });
   if (!trim(media_url) && !trim(transcript) && !trim(comment)) {
@@ -1073,12 +1078,19 @@ app.post('/api/observations', ah(async (req, res) => {
     pid = n;
   }
 
+  let cidStr = null;
+  if (child_id !== undefined && child_id !== null && child_id !== '') {
+    const n = parsePositiveIntId(child_id);
+    if (!n || !await getChild(n)) return res.status(400).json({ error: 'child_id does not reference a real child on the roster' });
+    cidStr = String(n);
+  }
+
   const { rows: [row] } = await pool.query(
-    `INSERT INTO observations (prospect_id, child_id, teacher_id, kind, media_url, transcript, comment, captured_at)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
-    [pid, optional(child_id), optional(teacher_id), k, optional(media_url), optional(transcript), optional(comment), nowIso()],
+    `INSERT INTO observations (prospect_id, child_id, teacher_id, kind, media_url, transcript, comment, tags, mood, captured_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
+    [pid, cidStr, optional(teacher_id), k, optional(media_url), optional(transcript), optional(comment), toJsonArrayColumn(tags), optional(mood), nowIso()],
   );
-  res.status(201).json(row);
+  res.status(201).json(parseObservationRow(row));
 }));
 
 app.delete('/api/observations/:id', ah(async (req, res) => {
