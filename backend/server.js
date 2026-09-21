@@ -1066,6 +1066,15 @@ app.patch('/api/children/:id', requireAuth, requireRole('teacher', 'leader'), ah
   res.json(parseChildRow(row));
 }));
 
+// ── /api/teachers ───────────────────────────────────────────────────────────
+// SCRUM-28 — every current teacher, e.g. for the "assign to a class" picker
+// on POST/PATCH /api/children. Staff-only (teacher or leader), same as the
+// children endpoints — not for parent/student accounts.
+app.get('/api/teachers', requireAuth, requireRole('teacher', 'leader'), ah(async (_req, res) => {
+  const { rows } = await pool.query('SELECT * FROM teachers ORDER BY name');
+  res.json(rows);
+}));
+
 app.get('/api/health', ah(async (_req, res) => {
   await pool.query('SELECT 1');
   res.json({ ok: true });
