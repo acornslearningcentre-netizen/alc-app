@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { hashPassword, verifyPassword, hashPasscode, genToken, publicUser } from './auth.js';
+import { hashPassword, verifyPassword, hashPasscode, genToken, genPasscode, publicUser } from './auth.js';
 
 describe('hashPassword / verifyPassword', () => {
   it('verifies the correct password', () => {
@@ -59,6 +59,19 @@ describe('genToken', () => {
   it('never produces the same token twice', () => {
     const tokens = new Set(Array.from({ length: 50 }, () => genToken()));
     expect(tokens.size).toBe(50);
+  });
+});
+
+describe('genPasscode', () => {
+  it('produces a 4-digit zero-padded string', () => {
+    for (let i = 0; i < 50; i++) {
+      expect(genPasscode()).toMatch(/^\d{4}$/);
+    }
+  });
+
+  it('varies across calls', () => {
+    const codes = new Set(Array.from({ length: 30 }, () => genPasscode()));
+    expect(codes.size).toBeGreaterThan(1);
   });
 });
 
