@@ -530,6 +530,52 @@ app.get('/api/auth/me', requireAuth, ah(async (req, res) => {
   res.json(publicUser(req.user));
 }));
 
+// SCRUM-96 — a leader creates a new staff account. When the new account is a
+// teacher, it's linked to a real teachers row (find-by-email, else create)
+// so GET /api/children's class-scoping (SCRUM-24) works for them immediately
+// — without this, a brand-new teacher would see an empty class forever, the
+// same "unlinked account" gap flagged when Classroom Roster shipped.
+app.post('/api/users', requireAuth, requireRole('leader'), ah(async (req, res) => {
+  const { name, email, password, role } = req.body ?? {};
+  if (role !== 'teacher' && role !== 'leader') return res.status(400).json({ error: "role must be 'teacher' or 'leader'" });
+  if (!trim(name)) return res.status(400).json({ error: 'name is required' });
+  if (!isEmail(email)) return res.status(400).json({ error: 'email is required and must look like an email' });
+  if (!trim(password)) return res.status(400).json({ error: 'password is required' });
+
+  const cleanEmail = trim(email).toLowerCase();
+  const { rows: [existingUser] } = await pool.query('SELECT 1 FROM users WHERE email = $1', [cleanEmail]);
+  if (existingUser) return res.status(409).json({ error: 'a staff account with that email already exists' });
+
+  try {
+    const user = await withTransaction(async (client) => {
+      const ts = nowIso();
+      let teacherId = null;
+      if (role === 'teacher') {
+        const { rows: [existingTeacher] } = await client.query('SELECT id FROM teachers WHERE email = $1', [cleanEmail]);
+        if (existingTeacher) {
+          teacherId = existingTeacher.id;
+        } else {
+          const { rows: [newTeacher] } = await client.query(
+            'INSERT INTO teachers (name, email, created_at) VALUES ($1, $2, $3) RETURNING id',
+            [trim(name), cleanEmail, ts],
+          );
+          teacherId = newTeacher.id;
+        }
+      }
+      const { rows: [row] } = await client.query(
+        `INSERT INTO users (role, email, password_hash, name, teacher_id, created_at)
+         VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+        [role, cleanEmail, hashPassword(password), trim(name), teacherId !== null ? String(teacherId) : null, ts],
+      );
+      return row;
+    });
+    res.status(201).json(publicUser(user));
+  } catch (err) {
+    if (err.code === '23505') return res.status(409).json({ error: 'a staff account with that email already exists' });
+    throw err;
+  }
+}));
+
 // ── Onboarding ───────────────────────────────────────────────────────────────
 // Surface for the onboarding journey (intake form, owner queue, assessments,
 // observations). Tables are defined in migrate() at the top of this file

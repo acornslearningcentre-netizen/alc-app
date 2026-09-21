@@ -23,6 +23,9 @@ export const hashPasscode = (passcode, pepper) =>
 
 export const genToken = () => crypto.randomBytes(32).toString('hex');
 
+/** A fresh 4-digit passcode (zero-padded), same shape as the demo passcodes ('0000', '1111'). */
+export const genPasscode = () => String(crypto.randomInt(0, 10000)).padStart(4, '0');
+
 /** Strips password_hash/passcode_hash off a user row before it ever reaches a response. */
 export const publicUser = (u) => u && ({
   id: u.id,
