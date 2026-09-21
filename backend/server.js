@@ -1349,6 +1349,47 @@ app.get('/api/flow', requireAuth, requireRole('teacher', 'leader'), ah(async (re
   res.json(rows);
 }));
 
+// SCRUM-33 — adds a step. sort_order defaults to "append at the end of that
+// day" (count of existing steps) so same-time ties still land in a stable,
+// predictable order without the caller having to think about it.
+app.post('/api/flow', requireAuth, requireRole('teacher', 'leader'), ah(async (req, res) => {
+  const b = req.body ?? {};
+  const date = trim(b.date);
+  if (!isIsoDate(date)) return res.status(400).json({ error: 'date is required and must be YYYY-MM-DD' });
+  const time = trim(b.time);
+  if (!isTimeHHMM(time)) return res.status(400).json({ error: 'time is required and must be HH:MM (24hr)' });
+  const label = trim(b.label);
+  if (!label) return res.status(400).json({ error: 'label is required' });
+
+  let teacherId;
+  if (req.user.role === 'leader') {
+    teacherId = parsePositiveIntId(b.teacher_id);
+    if (!teacherId || !await getTeacher(teacherId)) return res.status(400).json({ error: 'teacher_id does not reference a real teacher' });
+  } else {
+    teacherId = parsePositiveIntId(req.user.teacher_id);
+    if (!teacherId) return res.status(400).json({ error: 'your account is not linked to a teacher record yet' });
+  }
+
+  const state = b.state !== undefined ? cleanFlowState(b.state) : 'next';
+  if (b.state !== undefined && !state) return res.status(400).json({ error: 'invalid state' });
+
+  let sortOrder = Number.isInteger(b.sort_order) ? b.sort_order : null;
+  if (sortOrder === null) {
+    const { rows: [{ count }] } = await pool.query(
+      'SELECT COUNT(*)::int AS count FROM daily_flow_steps WHERE teacher_id = $1 AND date = $2',
+      [teacherId, date],
+    );
+    sortOrder = count;
+  }
+
+  const { rows: [row] } = await pool.query(
+    `INSERT INTO daily_flow_steps (teacher_id, date, time, label, state, ai_suggested, sort_order)
+     VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
+    [teacherId, date, time, label, state, toBool(b.ai_suggested), sortOrder],
+  );
+  res.status(201).json(row);
+}));
+
 app.get('/api/health', ah(async (_req, res) => {
   await pool.query('SELECT 1');
   res.json({ ok: true });
