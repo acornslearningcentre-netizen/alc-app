@@ -12,7 +12,7 @@ import express from 'express';
 import cors from 'cors';
 import multer from 'multer';
 import pg from 'pg';
-import { hashPassword, verifyPassword, hashPasscode, genToken, publicUser } from './lib/auth.js';
+import { hashPassword, verifyPassword, hashPasscode, genToken, genPasscode, publicUser } from './lib/auth.js';
 import { createAttemptThrottle } from './lib/throttle.js';
 import {
   trim, optional, cleanPriority, isEmail, toBool,
@@ -660,6 +660,44 @@ app.get('/api/prospects/:id', ah(async (req, res) => {
   res.json({ ...prospect, intake, assessments, observations });
 }));
 
+// SCRUM-97 — the moment a prospect's status becomes 'enrolled', auto-create
+// their real children row (if one doesn't already exist — children.prospect_id
+// is the link kept from SCRUM-23) plus a parent/carer contact from the
+// prospect's on-file parent details, then provision that parent a real login.
+// Idempotent: re-saving status='enrolled' on an already-enrolled prospect
+// does nothing extra (no duplicate child/parent/account).
+async function enrollProspect(client, prospect) {
+  const { rows: [existingChild] } = await client.query('SELECT * FROM children WHERE prospect_id = $1', [prospect.id]);
+  let child = existingChild;
+  if (!child) {
+    const name = prospect.child_first_name || 'Unnamed child';
+    const initials = name.split(/\s+/).map((w) => w[0]).join('').slice(0, 2).toUpperCase();
+    const ts = nowIso();
+    const { rows: [newChild] } = await client.query(
+      `INSERT INTO children (name, dob, initials, prospect_id, focus, strengths, gaps, flags, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, '[]', '[]', '[]', '[]', $5, $5) RETURNING *`,
+      [name, prospect.child_dob, initials, prospect.id, ts],
+    );
+    child = newChild;
+  }
+
+  const { rows: [existingParent] } = await client.query('SELECT * FROM parents WHERE child_id = $1 ORDER BY id LIMIT 1', [child.id]);
+  let parent = existingParent;
+  if (!parent) {
+    const { rows: [newParent] } = await client.query(
+      'INSERT INTO parents (child_id, name, relation) VALUES ($1, $2, $3) RETURNING *',
+      [child.id, prospect.parent_name || prospect.parent_email, 'Parent'],
+    );
+    parent = newParent;
+  }
+
+  const parentResult = await provisionParentAccount(client, child.id, parent);
+  return {
+    child_id: child.id,
+    parent_passcode: parentResult.alreadyExists ? null : parentResult.passcode,
+  };
+}
+
 app.patch('/api/prospects/:id', ah(async (req, res) => {
   const id = idParam(req, res); if (!id) return;
   const existing = await getProspect(id);
@@ -669,43 +707,50 @@ app.patch('/api/prospects/:id', ah(async (req, res) => {
   const status = b.status === undefined ? existing.status : cleanProspectStatus(b.status);
   if (b.status !== undefined && !status) return res.status(400).json({ error: 'invalid status' });
 
-  const { rows: [row] } = await pool.query(
-    `UPDATE prospects SET
-      parent_email        = $1,
-      parent_name         = $2,
-      parent_phone         = $3,
-      child_first_name    = $4,
-      child_dob            = $5,
-      year_group          = $6,
-      homework_in_plan    = $7,
-      tech_comfort_parent = $8,
-      tech_comfort_child  = $9,
-      flagged_needs       = $10,
-      consent_notes       = $11,
-      consent_media       = $12,
-      status               = $13,
-      updated_at           = $14
-    WHERE id = $15
-    RETURNING *`,
-    [
-      b.parent_email !== undefined ? trim(b.parent_email).toLowerCase() : existing.parent_email,
-      b.parent_name !== undefined ? optional(b.parent_name) : existing.parent_name,
-      b.parent_phone !== undefined ? optional(b.parent_phone) : existing.parent_phone,
-      b.child_first_name !== undefined ? optional(b.child_first_name) : existing.child_first_name,
-      b.child_dob !== undefined ? optional(b.child_dob) : existing.child_dob,
-      b.year_group !== undefined ? optional(b.year_group) : existing.year_group,
-      b.homework_in_plan !== undefined ? optional(b.homework_in_plan) : existing.homework_in_plan,
-      b.tech_comfort_parent !== undefined ? optional(b.tech_comfort_parent) : existing.tech_comfort_parent,
-      b.tech_comfort_child !== undefined ? optional(b.tech_comfort_child) : existing.tech_comfort_child,
-      b.flagged_needs !== undefined ? toBool(b.flagged_needs) : existing.flagged_needs,
-      b.consent_notes !== undefined ? toBool(b.consent_notes) : existing.consent_notes,
-      b.consent_media !== undefined ? toBool(b.consent_media) : existing.consent_media,
-      status,
-      nowIso(),
-      id,
-    ],
-  );
-  res.json(row);
+  const { row, enrollment } = await withTransaction(async (client) => {
+    const { rows: [updated] } = await client.query(
+      `UPDATE prospects SET
+        parent_email        = $1,
+        parent_name         = $2,
+        parent_phone         = $3,
+        child_first_name    = $4,
+        child_dob            = $5,
+        year_group          = $6,
+        homework_in_plan    = $7,
+        tech_comfort_parent = $8,
+        tech_comfort_child  = $9,
+        flagged_needs       = $10,
+        consent_notes       = $11,
+        consent_media       = $12,
+        status               = $13,
+        updated_at           = $14
+      WHERE id = $15
+      RETURNING *`,
+      [
+        b.parent_email !== undefined ? trim(b.parent_email).toLowerCase() : existing.parent_email,
+        b.parent_name !== undefined ? optional(b.parent_name) : existing.parent_name,
+        b.parent_phone !== undefined ? optional(b.parent_phone) : existing.parent_phone,
+        b.child_first_name !== undefined ? optional(b.child_first_name) : existing.child_first_name,
+        b.child_dob !== undefined ? optional(b.child_dob) : existing.child_dob,
+        b.year_group !== undefined ? optional(b.year_group) : existing.year_group,
+        b.homework_in_plan !== undefined ? optional(b.homework_in_plan) : existing.homework_in_plan,
+        b.tech_comfort_parent !== undefined ? optional(b.tech_comfort_parent) : existing.tech_comfort_parent,
+        b.tech_comfort_child !== undefined ? optional(b.tech_comfort_child) : existing.tech_comfort_child,
+        b.flagged_needs !== undefined ? toBool(b.flagged_needs) : existing.flagged_needs,
+        b.consent_notes !== undefined ? toBool(b.consent_notes) : existing.consent_notes,
+        b.consent_media !== undefined ? toBool(b.consent_media) : existing.consent_media,
+        status,
+        nowIso(),
+        id,
+      ],
+    );
+    let enrollmentResult = null;
+    if (existing.status !== 'enrolled' && updated.status === 'enrolled') {
+      enrollmentResult = await enrollProspect(client, updated);
+    }
+    return { row: updated, enrollment: enrollmentResult };
+  });
+  res.json(enrollment ? { ...row, enrollment } : row);
 }));
 
 // ── /api/assessments ────────────────────────────────────────────────────────
@@ -1110,6 +1155,46 @@ app.patch('/api/children/:id', requireAuth, requireRole('teacher', 'leader'), ah
     ],
   );
   res.json(parseChildRow(row));
+}));
+
+// SCRUM-97 — creates a parent login for one parent/carer on a child.
+// Idempotency key is (role='parent', child_id, name) since users has no
+// direct FK to parents — the only stable link available without adding a
+// column. Returns the plaintext passcode exactly once; it can never be
+// retrieved again (see POST /api/users/:id/reissue-passcode, SCRUM-99).
+async function provisionParentAccount(client, childId, parent) {
+  const childIdStr = String(childId);
+  const { rows: [existing] } = await client.query(
+    "SELECT 1 FROM users WHERE role = 'parent' AND child_id = $1 AND name = $2",
+    [childIdStr, parent.name],
+  );
+  if (existing) return { alreadyExists: true };
+
+  const passcode = genPasscode();
+  const { rows: [user] } = await client.query(
+    `INSERT INTO users (role, name, child_id, passcode_hash, created_at)
+     VALUES ('parent', $1, $2, $3, $4) RETURNING *`,
+    [parent.name, childIdStr, hashPasscode(passcode, passcodePepper), nowIso()],
+  );
+  return { passcode, user };
+}
+
+app.post('/api/children/:id/provision-parent', requireAuth, requireRole('teacher', 'leader'), ah(async (req, res) => {
+  const id = idParam(req, res); if (!id) return;
+  const child = await getChild(id);
+  if (!child || !canSeeChild(req.user.role, parsePositiveIntId(req.user.teacher_id), child.teacher_id)) {
+    return res.status(404).json({ error: 'not found' });
+  }
+  const parentId = parsePositiveIntId(req.body?.parent_id);
+  if (!parentId) return res.status(400).json({ error: 'parent_id is required' });
+  const { rows: [parent] } = await pool.query('SELECT * FROM parents WHERE id = $1 AND child_id = $2', [parentId, id]);
+  if (!parent) return res.status(400).json({ error: 'parent_id does not reference a parent/carer on this child' });
+
+  const result = await withTransaction((client) => provisionParentAccount(client, id, parent));
+  if (result.alreadyExists) {
+    return res.status(409).json({ error: 'a login already exists for this parent — reissue a passcode instead of creating a new one' });
+  }
+  res.status(201).json({ user: publicUser(result.user), passcode: result.passcode });
 }));
 
 // ── /api/teachers ───────────────────────────────────────────────────────────
