@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   trim, optional, cleanPriority, isEmail, toBool,
   cleanProspectStatus, cleanAssessmentStatus, cleanObservationKind,
+  cleanTone, cleanPronoun,
   parsePositiveIntId, parseCorsOrigins,
 } from './validators.js';
 
@@ -85,6 +86,14 @@ describe('status cleaners', () => {
   it('cleanObservationKind accepts only known kinds', () => {
     expect(cleanObservationKind('voice')).toBe('voice');
     expect(cleanObservationKind('bogus')).toBe(null);
+  });
+  it('cleanTone accepts only known tones', () => {
+    expect(cleanTone('sage')).toBe('sage');
+    expect(cleanTone('bogus')).toBe(null);
+  });
+  it('cleanPronoun accepts only known pronouns', () => {
+    expect(cleanPronoun('they')).toBe('they');
+    expect(cleanPronoun('bogus')).toBe(null);
   });
 });
 
