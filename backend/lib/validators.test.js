@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   trim, optional, cleanPriority, isEmail, toBool,
   cleanProspectStatus, cleanAssessmentStatus, cleanObservationKind,
-  cleanTone, cleanPronoun,
+  cleanTone, cleanPronoun, cleanFlowState, isIsoDate, isTimeHHMM,
   parsePositiveIntId, parseCorsOrigins,
 } from './validators.js';
 
@@ -94,6 +94,38 @@ describe('status cleaners', () => {
   it('cleanPronoun accepts only known pronouns', () => {
     expect(cleanPronoun('they')).toBe('they');
     expect(cleanPronoun('bogus')).toBe(null);
+  });
+  it('cleanFlowState accepts only known states', () => {
+    expect(cleanFlowState('now')).toBe('now');
+    expect(cleanFlowState('bogus')).toBe(null);
+  });
+});
+
+describe('isIsoDate', () => {
+  it('accepts YYYY-MM-DD', () => {
+    expect(isIsoDate('2026-09-22')).toBe(true);
+  });
+  it('rejects other formats and garbage', () => {
+    expect(isIsoDate('22-09-2026')).toBe(false);
+    expect(isIsoDate('2026/09/22')).toBe(false);
+    expect(isIsoDate('not a date')).toBe(false);
+    expect(isIsoDate('')).toBe(false);
+    expect(isIsoDate(undefined)).toBe(false);
+  });
+});
+
+describe('isTimeHHMM', () => {
+  it('accepts zero-padded 24hr HH:MM', () => {
+    expect(isTimeHHMM('08:30')).toBe(true);
+    expect(isTimeHHMM('23:59')).toBe(true);
+    expect(isTimeHHMM('00:00')).toBe(true);
+  });
+  it('rejects out-of-range or malformed values', () => {
+    expect(isTimeHHMM('24:00')).toBe(false);
+    expect(isTimeHHMM('9:30')).toBe(false);
+    expect(isTimeHHMM('08:60')).toBe(false);
+    expect(isTimeHHMM('8:30am')).toBe(false);
+    expect(isTimeHHMM('')).toBe(false);
   });
 });
 
