@@ -18,13 +18,14 @@ import {
   trim, optional, cleanPriority, isEmail, toBool,
   PROSPECT_STATUSES, ASSESSMENT_STATUSES, OBSERVATION_KINDS,
   cleanProspectStatus, cleanAssessmentStatus, cleanObservationKind,
-  cleanTone, cleanPronoun,
+  cleanTone, cleanPronoun, cleanFlowState, isIsoDate, isTimeHHMM,
   parsePositiveIntId, parseCorsOrigins,
 } from './lib/validators.js';
 import { composeDraftReport } from './lib/report-draft.js';
 import { isAllowedMimeType, extensionFor, MAX_UPLOAD_BYTES } from './lib/media.js';
 import { sendReportEmail } from './lib/report-email.js';
 import { parseChildRow, toJsonArrayColumn, canSeeChild } from './lib/children.js';
+import { canSeeFlowStep } from './lib/flow.js';
 
 const { Pool } = pg;
 const PORT = Number(process.env.PORT) || 3000;
@@ -1323,6 +1324,29 @@ app.post('/api/teachers', requireAuth, requireRole('leader'), ah(async (req, res
     if (err.code === '23505') return res.status(409).json({ error: 'a teacher with that email already exists' });
     throw err;
   }
+}));
+
+// ── /api/flow ────────────────────────────────────────────────────────────────
+// Today's Daily Flow (SCRUM-30/32) — a teacher's real, editable schedule,
+// replacing the fixed sample timeline on the Teacher Today screen. A teacher
+// always sees their own day; a leader must specify which teacher's day to view.
+app.get('/api/flow', requireAuth, requireRole('teacher', 'leader'), ah(async (req, res) => {
+  const date = trim(req.query.date);
+  if (!isIsoDate(date)) return res.status(400).json({ error: 'date is required and must be YYYY-MM-DD' });
+
+  let teacherId;
+  if (req.user.role === 'leader') {
+    teacherId = parsePositiveIntId(req.query.teacher_id);
+    if (!teacherId) return res.status(400).json({ error: 'teacher_id is required' });
+  } else {
+    teacherId = parsePositiveIntId(req.user.teacher_id);
+  }
+
+  const { rows } = await pool.query(
+    'SELECT * FROM daily_flow_steps WHERE teacher_id = $1 AND date = $2 ORDER BY time ASC, sort_order ASC',
+    [teacherId, date],
+  );
+  res.json(rows);
 }));
 
 app.get('/api/health', ah(async (_req, res) => {

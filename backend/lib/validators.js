@@ -29,6 +29,15 @@ export const PRONOUNS = new Set(['he', 'she', 'they']);
 export const cleanTone = (v) => (TONES.has(trim(v)) ? trim(v) : null);
 export const cleanPronoun = (v) => (PRONOUNS.has(trim(v)) ? trim(v) : null);
 
+export const FLOW_STATES = new Set(['done', 'now', 'next']);
+export const cleanFlowState = (v) => (FLOW_STATES.has(trim(v)) ? trim(v) : null);
+
+export const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+export const isIsoDate = (v) => ISO_DATE_RE.test(trim(v));
+
+export const TIME_HHMM_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
+export const isTimeHHMM = (v) => TIME_HHMM_RE.test(trim(v));
+
 /** Parses a route param / query value as a positive integer id, or null if invalid. */
 export const parsePositiveIntId = (raw) => {
   const id = Number(raw);
