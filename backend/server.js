@@ -1075,6 +1075,31 @@ app.get('/api/teachers', requireAuth, requireRole('teacher', 'leader'), ah(async
   res.json(rows);
 }));
 
+// SCRUM-29 — leader-only (creating a staff record), same as POST /api/children.
+app.post('/api/teachers', requireAuth, requireRole('leader'), ah(async (req, res) => {
+  const b = req.body ?? {};
+  const name = trim(b.name);
+  if (!name) return res.status(400).json({ error: 'name is required' });
+
+  const email = optional(b.email) ? trim(b.email).toLowerCase() : null;
+  if (email && !isEmail(email)) return res.status(400).json({ error: 'email must look like an email' });
+  if (email) {
+    const { rows: [existing] } = await pool.query('SELECT 1 FROM teachers WHERE email = $1', [email]);
+    if (existing) return res.status(409).json({ error: 'a teacher with that email already exists' });
+  }
+
+  try {
+    const { rows: [row] } = await pool.query(
+      'INSERT INTO teachers (name, email, created_at) VALUES ($1, $2, $3) RETURNING *',
+      [name, email, nowIso()],
+    );
+    res.status(201).json(row);
+  } catch (err) {
+    if (err.code === '23505') return res.status(409).json({ error: 'a teacher with that email already exists' });
+    throw err;
+  }
+}));
+
 app.get('/api/health', ah(async (_req, res) => {
   await pool.query('SELECT 1');
   res.json({ ok: true });
