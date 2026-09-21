@@ -215,6 +215,23 @@ async function migrate() {
     );
     CREATE INDEX IF NOT EXISTS idx_parents_child ON parents(child_id);
 
+    -- Today's Daily Flow (SCRUM-30/31) — replaces the fixed sample timeline
+    -- on the Teacher Today screen. One row per step; each belongs to exactly
+    -- one teacher and one date, so different teachers' (and different days')
+    -- schedules never mix. sort_order is a tiebreaker for steps that share
+    -- the same time value — ORDER BY time, sort_order gives a stable sort.
+    CREATE TABLE IF NOT EXISTS daily_flow_steps (
+      id           SERIAL PRIMARY KEY,
+      teacher_id   INTEGER NOT NULL REFERENCES teachers(id),
+      date         TEXT NOT NULL,           -- YYYY-MM-DD
+      time         TEXT NOT NULL,           -- HH:MM, 24hr
+      label        TEXT NOT NULL,
+      state        TEXT NOT NULL DEFAULT 'next' CHECK (state IN ('done','now','next')),
+      ai_suggested BOOLEAN NOT NULL DEFAULT false,
+      sort_order   INTEGER NOT NULL DEFAULT 0
+    );
+    CREATE INDEX IF NOT EXISTS idx_flow_teacher_date ON daily_flow_steps(teacher_id, date);
+
     -- Auth (SCRUM-16 / SCRUM-17): real accounts and sessions, replacing the
     -- passcode-in-the-frontend-bundle login. Staff (teacher/leader) sign in
     -- with email+password; parent/student sign in with a short passcode.
