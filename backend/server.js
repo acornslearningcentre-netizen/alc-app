@@ -989,6 +989,83 @@ app.get('/api/children/:id', requireAuth, requireRole('teacher', 'leader'), ah(a
   res.json({ ...parseChildRow(child), parents });
 }));
 
+// SCRUM-27 — partial update. Same permission rule as GET /:id (404, not
+// 403, for a child outside your class). Only fields sent in the body get
+// changed; teacher_id/prospect_id/tone/pronoun are validated the same way
+// as on create when they're included.
+app.patch('/api/children/:id', requireAuth, requireRole('teacher', 'leader'), ah(async (req, res) => {
+  const id = idParam(req, res); if (!id) return;
+  const existing = await getChild(id);
+  if (!existing || !canSeeChild(req.user.role, parsePositiveIntId(req.user.teacher_id), existing.teacher_id)) {
+    return res.status(404).json({ error: 'not found' });
+  }
+  const b = req.body ?? {};
+
+  let teacherId = existing.teacher_id;
+  if (b.teacher_id !== undefined) {
+    teacherId = parsePositiveIntId(b.teacher_id);
+    if (!teacherId || !await getTeacher(teacherId)) return res.status(400).json({ error: 'teacher_id does not reference a real teacher' });
+  }
+
+  let prospectId = existing.prospect_id;
+  if (b.prospect_id !== undefined) {
+    if (b.prospect_id === null) {
+      prospectId = null;
+    } else {
+      prospectId = parsePositiveIntId(b.prospect_id);
+      if (!prospectId || !await getProspect(prospectId)) return res.status(400).json({ error: 'prospect_id does not reference a real prospect' });
+    }
+  }
+
+  let tone = existing.tone;
+  if (b.tone !== undefined) {
+    tone = b.tone === null ? null : cleanTone(b.tone);
+    if (b.tone !== null && !tone) return res.status(400).json({ error: 'invalid tone' });
+  }
+
+  let pronoun = existing.pronoun;
+  if (b.pronoun !== undefined) {
+    pronoun = b.pronoun === null ? null : cleanPronoun(b.pronoun);
+    if (b.pronoun !== null && !pronoun) return res.status(400).json({ error: 'invalid pronoun' });
+  }
+
+  const { rows: [row] } = await pool.query(
+    `UPDATE children SET
+      name       = $1,
+      dob        = $2,
+      initials   = $3,
+      tone       = $4,
+      teacher_id = $5,
+      pronoun    = $6,
+      focus      = $7,
+      strengths  = $8,
+      gaps       = $9,
+      style      = $10,
+      flags      = $11,
+      prospect_id = $12,
+      updated_at = $13
+    WHERE id = $14
+    RETURNING *`,
+    [
+      b.name !== undefined ? trim(b.name) || existing.name : existing.name,
+      b.dob !== undefined ? optional(b.dob) : existing.dob,
+      b.initials !== undefined ? optional(b.initials) : existing.initials,
+      tone,
+      teacherId,
+      pronoun,
+      b.focus !== undefined ? toJsonArrayColumn(b.focus) : existing.focus,
+      b.strengths !== undefined ? toJsonArrayColumn(b.strengths) : existing.strengths,
+      b.gaps !== undefined ? toJsonArrayColumn(b.gaps) : existing.gaps,
+      b.style !== undefined ? optional(b.style) : existing.style,
+      b.flags !== undefined ? toJsonArrayColumn(b.flags) : existing.flags,
+      prospectId,
+      nowIso(),
+      id,
+    ],
+  );
+  res.json(parseChildRow(row));
+}));
+
 app.get('/api/health', ah(async (_req, res) => {
   await pool.query('SELECT 1');
   res.json({ ok: true });
