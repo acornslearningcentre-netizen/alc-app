@@ -24,7 +24,7 @@ import {
 import { composeDraftReport } from './lib/report-draft.js';
 import { isAllowedMimeType, extensionFor, MAX_UPLOAD_BYTES } from './lib/media.js';
 import { sendReportEmail } from './lib/report-email.js';
-import { parseChildRow, toJsonArrayColumn, canSeeChild } from './lib/children.js';
+import { parseChildRow, toJsonArrayColumn, parseJsonArray, canSeeChild } from './lib/children.js';
 import { canSeeFlowStep } from './lib/flow.js';
 
 const { Pool } = pg;
@@ -1022,15 +1022,39 @@ app.post('/api/media/upload', (req, res) => {
 });
 
 // ── /api/observations ───────────────────────────────────────────────────────
+const parseObservationRow = (row) => ({ ...row, tags: parseJsonArray(row.tags) });
+
+// SCRUM-37 — extends the existing (SCRUM-94) endpoint with child_id
+// filtering. Filtering by child_id merges that child's post-enrolment
+// observations with any pre-enrolment ones captured before they existed —
+// live-joined via children.prospect_id rather than a one-time backfill, so
+// it stays correct for every future enrolment too, not just a snapshot.
 app.get('/api/observations', ah(async (req, res) => {
   const pid = req.query.prospect_id ? Number(req.query.prospect_id) : null;
   if (pid !== null && (!Number.isInteger(pid) || pid <= 0)) {
     return res.status(400).json({ error: 'prospect_id must be a positive integer' });
   }
-  const { rows } = pid
-    ? await pool.query('SELECT * FROM observations WHERE prospect_id = $1 ORDER BY captured_at DESC', [pid])
-    : await pool.query('SELECT * FROM observations ORDER BY captured_at DESC LIMIT 100');
-  res.json(rows);
+  const cid = req.query.child_id !== undefined ? parsePositiveIntId(req.query.child_id) : null;
+  if (req.query.child_id !== undefined && !cid) {
+    return res.status(400).json({ error: 'child_id must be a positive integer' });
+  }
+
+  let rows;
+  if (cid) {
+    const child = await getChild(cid);
+    if (!child) return res.status(404).json({ error: 'child not found' });
+    ({ rows } = child.prospect_id
+      ? await pool.query(
+          'SELECT * FROM observations WHERE child_id = $1 OR prospect_id = $2 ORDER BY captured_at DESC',
+          [String(cid), child.prospect_id],
+        )
+      : await pool.query('SELECT * FROM observations WHERE child_id = $1 ORDER BY captured_at DESC', [String(cid)]));
+  } else if (pid) {
+    ({ rows } = await pool.query('SELECT * FROM observations WHERE prospect_id = $1 ORDER BY captured_at DESC', [pid]));
+  } else {
+    ({ rows } = await pool.query('SELECT * FROM observations ORDER BY captured_at DESC LIMIT 100'));
+  }
+  res.json(rows.map(parseObservationRow));
 }));
 
 app.post('/api/observations', ah(async (req, res) => {
