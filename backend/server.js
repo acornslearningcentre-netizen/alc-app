@@ -23,6 +23,7 @@ import {
 import { composeDraftReport } from './lib/report-draft.js';
 import { isAllowedMimeType, extensionFor, MAX_UPLOAD_BYTES } from './lib/media.js';
 import { sendReportEmail } from './lib/report-email.js';
+import { parseChildRow } from './lib/children.js';
 
 const { Pool } = pg;
 const PORT = Number(process.env.PORT) || 3000;
@@ -280,6 +281,12 @@ const requireAuth = async (req, res, next) => {
 
   req.user = user;
   req.token = token;
+  next();
+};
+
+// Classroom Roster (SCRUM-24+) — first use of role-gating in this API.
+const requireRole = (...roles) => (req, res, next) => {
+  if (!roles.includes(req.user.role)) return res.status(403).json({ error: 'forbidden' });
   next();
 };
 
@@ -891,6 +898,18 @@ app.delete('/api/observations/:id', ah(async (req, res) => {
   const id = idParam(req, res); if (!id) return;
   await pool.query('DELETE FROM observations WHERE id = $1', [id]);
   res.status(204).end();
+}));
+
+// ── /api/children ───────────────────────────────────────────────────────────
+// Classroom Roster (SCRUM-22/24) — the app's first real, editable class
+// list, replacing the fixed demo data. A teacher only sees their own class;
+// a leader sees everyone. Linking an auth account to a real teachers.id row
+// is Sprint 6's job — until then a teacher account correctly sees nothing.
+app.get('/api/children', requireAuth, requireRole('teacher', 'leader'), ah(async (req, res) => {
+  const { rows } = req.user.role === 'leader'
+    ? await pool.query('SELECT * FROM children ORDER BY name')
+    : await pool.query('SELECT * FROM children WHERE teacher_id = $1 ORDER BY name', [parsePositiveIntId(req.user.teacher_id)]);
+  res.json(rows.map(parseChildRow));
 }));
 
 app.get('/api/health', ah(async (_req, res) => {
