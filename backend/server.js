@@ -576,6 +576,50 @@ app.post('/api/users', requireAuth, requireRole('leader'), ah(async (req, res) =
   }
 }));
 
+// SCRUM-99 — only ever resolves to a parent/student account (passcodes don't
+// apply to staff logins), and only if the caller is allowed to see the
+// child that account belongs to — same canSeeChild rule as the children
+// endpoints, so a teacher can't probe passcode accounts outside their class.
+async function getPasscodeHolderContext(req, targetId) {
+  const { rows: [target] } = await pool.query('SELECT * FROM users WHERE id = $1', [targetId]);
+  if (!target || (target.role !== 'parent' && target.role !== 'student')) return null;
+  const childId = parsePositiveIntId(target.child_id);
+  const child = childId ? await getChild(childId) : null;
+  if (!child || !canSeeChild(req.user.role, parsePositiveIntId(req.user.teacher_id), child.teacher_id)) return null;
+  return { target, child };
+}
+
+// Never returns the passcode itself — passcode_hash is one-way (HMAC), so
+// there is no "original value" to show back. This confirms who an account
+// belongs to; see reissue-passcode below for actually changing it.
+app.get('/api/users/:id/passcode-holder', requireAuth, requireRole('teacher', 'leader'), ah(async (req, res) => {
+  const id = idParam(req, res); if (!id) return;
+  const ctx = await getPasscodeHolderContext(req, id);
+  if (!ctx) return res.status(404).json({ error: 'not found' });
+  res.json({
+    user_id: ctx.target.id,
+    role: ctx.target.role,
+    name: ctx.target.name,
+    child_id: ctx.child.id,
+    child_name: ctx.child.name,
+  });
+}));
+
+// Only ever touches passcode_hash — never role/name/child_id — so reissuing
+// can't accidentally reassign which child or family the account belongs to.
+app.post('/api/users/:id/reissue-passcode', requireAuth, requireRole('teacher', 'leader'), ah(async (req, res) => {
+  const id = idParam(req, res); if (!id) return;
+  const ctx = await getPasscodeHolderContext(req, id);
+  if (!ctx) return res.status(404).json({ error: 'not found' });
+
+  const passcode = genPasscode();
+  const { rows: [updated] } = await pool.query(
+    'UPDATE users SET passcode_hash = $1 WHERE id = $2 RETURNING *',
+    [hashPasscode(passcode, passcodePepper), id],
+  );
+  res.json({ user: publicUser(updated), passcode });
+}));
+
 // ── Onboarding ───────────────────────────────────────────────────────────────
 // Surface for the onboarding journey (intake form, owner queue, assessments,
 // observations). Tables are defined in migrate() at the top of this file
