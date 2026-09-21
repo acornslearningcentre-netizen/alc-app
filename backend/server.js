@@ -18,12 +18,13 @@ import {
   trim, optional, cleanPriority, isEmail, toBool,
   PROSPECT_STATUSES, ASSESSMENT_STATUSES, OBSERVATION_KINDS,
   cleanProspectStatus, cleanAssessmentStatus, cleanObservationKind,
+  cleanTone, cleanPronoun,
   parsePositiveIntId, parseCorsOrigins,
 } from './lib/validators.js';
 import { composeDraftReport } from './lib/report-draft.js';
 import { isAllowedMimeType, extensionFor, MAX_UPLOAD_BYTES } from './lib/media.js';
 import { sendReportEmail } from './lib/report-email.js';
-import { parseChildRow } from './lib/children.js';
+import { parseChildRow, toJsonArrayColumn } from './lib/children.js';
 
 const { Pool } = pg;
 const PORT = Number(process.env.PORT) || 3000;
@@ -910,6 +911,65 @@ app.get('/api/children', requireAuth, requireRole('teacher', 'leader'), ah(async
     ? await pool.query('SELECT * FROM children ORDER BY name')
     : await pool.query('SELECT * FROM children WHERE teacher_id = $1 ORDER BY name', [parsePositiveIntId(req.user.teacher_id)]);
   res.json(rows.map(parseChildRow));
+}));
+
+const getTeacher = async (id) => {
+  const { rows: [row] } = await pool.query('SELECT * FROM teachers WHERE id = $1', [id]);
+  return row ?? null;
+};
+
+// SCRUM-25 — a school leader adds a new child to the roster. Optionally
+// takes 1–2 parent/carer contacts in the same call (parents.child_id is
+// NOT NULL, so they can't exist before the child does).
+app.post('/api/children', requireAuth, requireRole('leader'), ah(async (req, res) => {
+  const b = req.body ?? {};
+  const name = trim(b.name);
+  if (!name) return res.status(400).json({ error: 'name is required' });
+
+  const teacherId = parsePositiveIntId(b.teacher_id);
+  if (!teacherId) return res.status(400).json({ error: 'teacher_id is required' });
+  if (!await getTeacher(teacherId)) return res.status(400).json({ error: 'teacher_id does not reference a real teacher' });
+
+  let prospectId = null;
+  if (b.prospect_id !== undefined && b.prospect_id !== null) {
+    prospectId = parsePositiveIntId(b.prospect_id);
+    if (!prospectId || !await getProspect(prospectId)) {
+      return res.status(400).json({ error: 'prospect_id does not reference a real prospect' });
+    }
+  }
+
+  const tone = b.tone !== undefined ? cleanTone(b.tone) : null;
+  if (b.tone !== undefined && b.tone !== null && !tone) return res.status(400).json({ error: 'invalid tone' });
+  const pronoun = b.pronoun !== undefined ? cleanPronoun(b.pronoun) : null;
+  if (b.pronoun !== undefined && b.pronoun !== null && !pronoun) return res.status(400).json({ error: 'invalid pronoun' });
+
+  const initials = optional(b.initials) || name.split(/\s+/).map((w) => w[0]).join('').slice(0, 2).toUpperCase();
+  const parents = Array.isArray(b.parents)
+    ? b.parents.filter((p) => trim(p?.name) && trim(p?.relation)).slice(0, 2)
+    : [];
+
+  const row = await withTransaction(async (client) => {
+    const ts = nowIso();
+    const { rows: [child] } = await client.query(
+      `INSERT INTO children (
+        name, dob, initials, tone, teacher_id, pronoun,
+        focus, strengths, gaps, style, flags, prospect_id,
+        created_at, updated_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $13)
+      RETURNING *`,
+      [
+        name, optional(b.dob), initials, tone, teacherId, pronoun,
+        toJsonArrayColumn(b.focus), toJsonArrayColumn(b.strengths), toJsonArrayColumn(b.gaps),
+        optional(b.style), toJsonArrayColumn(b.flags), prospectId,
+        ts,
+      ],
+    );
+    for (const p of parents) {
+      await client.query('INSERT INTO parents (child_id, name, relation) VALUES ($1, $2, $3)', [child.id, trim(p.name), trim(p.relation)]);
+    }
+    return child;
+  });
+  res.status(201).json(parseChildRow(row));
 }));
 
 app.get('/api/health', ah(async (_req, res) => {

@@ -24,6 +24,11 @@ export const cleanProspectStatus = (v) => (PROSPECT_STATUSES.has(trim(v)) ? trim
 export const cleanAssessmentStatus = (v) => (ASSESSMENT_STATUSES.has(trim(v)) ? trim(v) : null);
 export const cleanObservationKind = (v) => (OBSERVATION_KINDS.has(trim(v)) ? trim(v) : null);
 
+export const TONES = new Set(['sage', 'ochre', 'plum', 'sky']);
+export const PRONOUNS = new Set(['he', 'she', 'they']);
+export const cleanTone = (v) => (TONES.has(trim(v)) ? trim(v) : null);
+export const cleanPronoun = (v) => (PRONOUNS.has(trim(v)) ? trim(v) : null);
+
 /** Parses a route param / query value as a positive integer id, or null if invalid. */
 export const parsePositiveIntId = (raw) => {
   const id = Number(raw);
