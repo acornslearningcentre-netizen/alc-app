@@ -161,7 +161,7 @@ async function migrate() {
     CREATE TABLE IF NOT EXISTS observations (
       id            SERIAL PRIMARY KEY,
       prospect_id   INTEGER REFERENCES prospects(id) ON DELETE CASCADE,
-      child_id      TEXT,                              -- opaque ref; no children table yet
+      child_id      TEXT,                              -- stores children.id as text once real (SCRUM-22); still opaque pre-enrolment
       teacher_id    TEXT,
       kind          TEXT NOT NULL
                       CHECK (kind IN ('image','video','voice','text')),
@@ -174,6 +174,13 @@ async function migrate() {
     CREATE INDEX IF NOT EXISTS idx_observations_child    ON observations(child_id);
     CREATE INDEX IF NOT EXISTS idx_observations_kind     ON observations(kind);
     CREATE INDEX IF NOT EXISTS idx_observations_captured ON observations(captured_at DESC);
+
+    -- Classroom Observations for Enrolled Children (SCRUM-35/36) — extends
+    -- the observations table that already existed for the pre-enrolment
+    -- onboarding flow, rather than creating a parallel one. Existing rows
+    -- are untouched (both columns are nullable, no backfill needed).
+    ALTER TABLE observations ADD COLUMN IF NOT EXISTS tags TEXT; -- JSON array of strings, e.g. ["curious","focused"]
+    ALTER TABLE observations ADD COLUMN IF NOT EXISTS mood TEXT;
 
     -- Classroom Roster (SCRUM-22/23): real children/teachers/parents records,
     -- replacing the fixed demo list baked into the frontend. Linking an auth
