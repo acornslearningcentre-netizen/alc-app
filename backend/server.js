@@ -692,9 +692,11 @@ async function enrollProspect(client, prospect) {
   }
 
   const parentResult = await provisionParentAccount(client, child.id, parent);
+  const studentResult = await provisionStudentAccount(client, child);
   return {
     child_id: child.id,
     parent_passcode: parentResult.alreadyExists ? null : parentResult.passcode,
+    student_passcode: studentResult.alreadyExists ? null : studentResult.passcode,
   };
 }
 
@@ -1193,6 +1195,37 @@ app.post('/api/children/:id/provision-parent', requireAuth, requireRole('teacher
   const result = await withTransaction((client) => provisionParentAccount(client, id, parent));
   if (result.alreadyExists) {
     return res.status(409).json({ error: 'a login already exists for this parent — reissue a passcode instead of creating a new one' });
+  }
+  res.status(201).json({ user: publicUser(result.user), passcode: result.passcode });
+}));
+
+// SCRUM-98 — creates the child's own student login. Idempotency key is just
+// (role='student', child_id) — unlike parents, a child has exactly one
+// student account, so no name-based disambiguation is needed.
+async function provisionStudentAccount(client, child) {
+  const childIdStr = String(child.id);
+  const { rows: [existing] } = await client.query("SELECT 1 FROM users WHERE role = 'student' AND child_id = $1", [childIdStr]);
+  if (existing) return { alreadyExists: true };
+
+  const passcode = genPasscode();
+  const { rows: [user] } = await client.query(
+    `INSERT INTO users (role, name, child_id, passcode_hash, created_at)
+     VALUES ('student', $1, $2, $3, $4) RETURNING *`,
+    [child.name, childIdStr, hashPasscode(passcode, passcodePepper), nowIso()],
+  );
+  return { passcode, user };
+}
+
+app.post('/api/children/:id/provision-student', requireAuth, requireRole('teacher', 'leader'), ah(async (req, res) => {
+  const id = idParam(req, res); if (!id) return;
+  const child = await getChild(id);
+  if (!child || !canSeeChild(req.user.role, parsePositiveIntId(req.user.teacher_id), child.teacher_id)) {
+    return res.status(404).json({ error: 'not found' });
+  }
+
+  const result = await withTransaction((client) => provisionStudentAccount(client, child));
+  if (result.alreadyExists) {
+    return res.status(409).json({ error: 'a login already exists for this child — reissue a passcode instead of creating a new one' });
   }
   res.status(201).json({ user: publicUser(result.user), passcode: result.passcode });
 }));
