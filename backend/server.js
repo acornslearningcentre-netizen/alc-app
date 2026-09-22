@@ -1540,6 +1540,39 @@ app.get('/api/next-steps', requireAuth, requireRole('teacher', 'leader'), ah(asy
   res.json(rows);
 }));
 
+const getNextStep = async (id) => {
+  const { rows: [row] } = await pool.query('SELECT * FROM next_steps WHERE id = $1', [id]);
+  return row ?? null;
+};
+
+// Shared by accept (SCRUM-42) and dismiss (SCRUM-43) — same permission rule,
+// same "already resolved" guard, only the target status differs.
+async function resolveNextStep(req, res, id, newStatus) {
+  const step = await getNextStep(id);
+  if (!step) return res.status(404).json({ error: 'not found' });
+  const child = await getChild(step.child_id);
+  if (!child || !canSeeChild(req.user.role, parsePositiveIntId(req.user.teacher_id), child.teacher_id)) {
+    return res.status(404).json({ error: 'not found' });
+  }
+  if (step.status !== 'pending') {
+    return res.status(409).json({ error: `this suggestion has already been ${step.status}` });
+  }
+  const { rows: [row] } = await pool.query(
+    'UPDATE next_steps SET status = $1, resolved_at = $2 WHERE id = $3 RETURNING *',
+    [newStatus, nowIso(), id],
+  );
+  res.json(row);
+}
+
+// SCRUM-42 — accepting immediately stops the suggestion counting as
+// "awaiting review" (GET /api/next-steps?status=pending won't return it
+// anymore). Accepting a resolved suggestion again is a clear 409, not a
+// silent no-op.
+app.post('/api/next-steps/:id/accept', requireAuth, requireRole('teacher', 'leader'), ah(async (req, res) => {
+  const id = idParam(req, res); if (!id) return;
+  await resolveNextStep(req, res, id, 'accepted');
+}));
+
 app.get('/api/health', ah(async (_req, res) => {
   await pool.query('SELECT 1');
   res.json({ ok: true });
