@@ -240,6 +240,24 @@ async function migrate() {
     );
     CREATE INDEX IF NOT EXISTS idx_flow_teacher_date ON daily_flow_steps(teacher_id, date);
 
+    -- AI Suggestions & Next Steps (SCRUM-39/40) — turns the "AI suggestions
+    -- awaiting review" counter and the "three things to try today" brief on
+    -- Teacher Today from hand-written example text into real, trackable
+    -- recommendations. Resolved (accepted/dismissed) rows are kept, never
+    -- deleted, so a leader can later see how often suggestions get used.
+    CREATE TABLE IF NOT EXISTS next_steps (
+      id           SERIAL PRIMARY KEY,
+      child_id     INTEGER NOT NULL REFERENCES children(id) ON DELETE CASCADE,
+      type         TEXT NOT NULL,
+      title        TEXT NOT NULL,
+      rationale    TEXT,
+      status       TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','accepted','dismissed')),
+      suggested_at TEXT NOT NULL,
+      resolved_at  TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_next_steps_child  ON next_steps(child_id);
+    CREATE INDEX IF NOT EXISTS idx_next_steps_status ON next_steps(status);
+
     -- Auth (SCRUM-16 / SCRUM-17): real accounts and sessions, replacing the
     -- passcode-in-the-frontend-bundle login. Staff (teacher/leader) sign in
     -- with email+password; parent/student sign in with a short passcode.
