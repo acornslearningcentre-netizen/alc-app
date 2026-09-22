@@ -3,6 +3,7 @@ import {
   trim, optional, cleanPriority, isEmail, toBool,
   cleanProspectStatus, cleanAssessmentStatus, cleanObservationKind,
   cleanTone, cleanPronoun, cleanFlowState, isIsoDate, isTimeHHMM,
+  cleanNextStepStatus,
   parsePositiveIntId, parseCorsOrigins,
 } from './validators.js';
 
@@ -98,6 +99,10 @@ describe('status cleaners', () => {
   it('cleanFlowState accepts only known states', () => {
     expect(cleanFlowState('now')).toBe('now');
     expect(cleanFlowState('bogus')).toBe(null);
+  });
+  it('cleanNextStepStatus accepts only known statuses', () => {
+    expect(cleanNextStepStatus('accepted')).toBe('accepted');
+    expect(cleanNextStepStatus('bogus')).toBe(null);
   });
 });
 
