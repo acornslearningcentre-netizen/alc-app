@@ -18,7 +18,7 @@ import {
   trim, optional, cleanPriority, isEmail, toBool,
   PROSPECT_STATUSES, ASSESSMENT_STATUSES, OBSERVATION_KINDS,
   cleanProspectStatus, cleanAssessmentStatus, cleanObservationKind,
-  cleanTone, cleanPronoun, cleanFlowState, isIsoDate, isTimeHHMM,
+  cleanTone, cleanPronoun, cleanFlowState, isIsoDate, isTimeHHMM, cleanNextStepStatus,
   parsePositiveIntId, parseCorsOrigins,
 } from './lib/validators.js';
 import { composeDraftReport } from './lib/report-draft.js';
@@ -1499,6 +1499,45 @@ app.patch('/api/flow/:id', requireAuth, requireRole('teacher', 'leader'), ah(asy
     ],
   );
   res.json(row);
+}));
+
+// ── /api/next-steps ─────────────────────────────────────────────────────────
+// AI Suggestions & Next Steps (SCRUM-39/41) — real, trackable recommendations
+// replacing the hand-written example text on Teacher Today. Filtering to
+// 'pending' is what powers the "awaiting review" count.
+app.get('/api/next-steps', requireAuth, requireRole('teacher', 'leader'), ah(async (req, res) => {
+  const status = req.query.status !== undefined ? cleanNextStepStatus(req.query.status) : null;
+  if (req.query.status !== undefined && !status) {
+    return res.status(400).json({ error: 'status must be one of: pending, accepted, dismissed' });
+  }
+
+  if (req.query.child_id !== undefined) {
+    const cid = parsePositiveIntId(req.query.child_id);
+    if (!cid) return res.status(400).json({ error: 'child_id must be a positive integer' });
+    const child = await getChild(cid);
+    if (!child || !canSeeChild(req.user.role, parsePositiveIntId(req.user.teacher_id), child.teacher_id)) {
+      return res.status(404).json({ error: 'not found' });
+    }
+    const { rows } = status
+      ? await pool.query('SELECT * FROM next_steps WHERE child_id = $1 AND status = $2 ORDER BY suggested_at DESC', [cid, status])
+      : await pool.query('SELECT * FROM next_steps WHERE child_id = $1 ORDER BY suggested_at DESC', [cid]);
+    return res.json(rows);
+  }
+
+  // No child_id — a teacher only ever sees suggestions for their own class;
+  // a leader sees everyone's, same scoping shape as GET /api/children.
+  const params = [];
+  let where = '1=1';
+  if (req.user.role !== 'leader') {
+    params.push(parsePositiveIntId(req.user.teacher_id));
+    where += ` AND child_id IN (SELECT id FROM children WHERE teacher_id = $${params.length})`;
+  }
+  if (status) {
+    params.push(status);
+    where += ` AND status = $${params.length}`;
+  }
+  const { rows } = await pool.query(`SELECT * FROM next_steps WHERE ${where} ORDER BY suggested_at DESC`, params);
+  res.json(rows);
 }));
 
 app.get('/api/health', ah(async (_req, res) => {

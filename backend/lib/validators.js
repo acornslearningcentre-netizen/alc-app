@@ -32,6 +32,9 @@ export const cleanPronoun = (v) => (PRONOUNS.has(trim(v)) ? trim(v) : null);
 export const FLOW_STATES = new Set(['done', 'now', 'next']);
 export const cleanFlowState = (v) => (FLOW_STATES.has(trim(v)) ? trim(v) : null);
 
+export const NEXT_STEP_STATUSES = new Set(['pending', 'accepted', 'dismissed']);
+export const cleanNextStepStatus = (v) => (NEXT_STEP_STATUSES.has(trim(v)) ? trim(v) : null);
+
 export const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 export const isIsoDate = (v) => ISO_DATE_RE.test(trim(v));
 
