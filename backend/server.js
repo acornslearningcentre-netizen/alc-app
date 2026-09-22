@@ -1573,6 +1573,14 @@ app.post('/api/next-steps/:id/accept', requireAuth, requireRole('teacher', 'lead
   await resolveNextStep(req, res, id, 'accepted');
 }));
 
+// SCRUM-43 — dismissing keeps the row (never deletes it), so there's a
+// permanent record it was offered and declined. Same shared handler,
+// permission rule, and already-resolved guard as accept.
+app.post('/api/next-steps/:id/dismiss', requireAuth, requireRole('teacher', 'leader'), ah(async (req, res) => {
+  const id = idParam(req, res); if (!id) return;
+  await resolveNextStep(req, res, id, 'dismissed');
+}));
+
 app.get('/api/health', ah(async (_req, res) => {
   await pool.query('SELECT 1');
   res.json({ ok: true });
