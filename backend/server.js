@@ -26,6 +26,7 @@ import { isAllowedMimeType, extensionFor, MAX_UPLOAD_BYTES } from './lib/media.j
 import { sendReportEmail } from './lib/report-email.js';
 import { parseChildRow, toJsonArrayColumn, parseJsonArray, canSeeChild } from './lib/children.js';
 import { canSeeFlowStep } from './lib/flow.js';
+import { composeNextStepSuggestion } from './lib/next-steps.js';
 
 const { Pool } = pg;
 const PORT = Number(process.env.PORT) || 3000;
@@ -1579,6 +1580,59 @@ app.post('/api/next-steps/:id/accept', requireAuth, requireRole('teacher', 'lead
 app.post('/api/next-steps/:id/dismiss', requireAuth, requireRole('teacher', 'leader'), ah(async (req, res) => {
   const id = idParam(req, res); if (!id) return;
   await resolveNextStep(req, res, id, 'dismissed');
+}));
+
+// ── /api/ai ──────────────────────────────────────────────────────────────────
+// SCRUM-44 — generates real, trackable next-step suggestions for a teacher's
+// class from real recent observations (composeNextStepSuggestion, template-
+// based — no LLM API key is provisioned for this deployment, same reasoning
+// as the assessment-report draft, SCRUM-84). A child with no recent
+// observations gets no suggestion, never an invented one. A child who
+// already has a pending suggestion isn't given a second one — "fresh" means
+// not piling duplicates into the review queue.
+const RECENT_OBSERVATION_DAYS = 14;
+
+app.post('/api/ai/brief', requireAuth, requireRole('teacher', 'leader'), ah(async (req, res) => {
+  let teacherId;
+  if (req.user.role === 'leader') {
+    teacherId = parsePositiveIntId(req.body?.teacher_id);
+    if (!teacherId || !await getTeacher(teacherId)) return res.status(400).json({ error: 'teacher_id does not reference a real teacher' });
+  } else {
+    teacherId = parsePositiveIntId(req.user.teacher_id);
+    if (!teacherId) return res.status(400).json({ error: 'your account is not linked to a teacher record yet' });
+  }
+
+  const { rows: children } = await pool.query('SELECT * FROM children WHERE teacher_id = $1 ORDER BY name', [teacherId]);
+  const cutoff = new Date(Date.now() - RECENT_OBSERVATION_DAYS * 24 * 60 * 60 * 1000).toISOString();
+
+  const results = [];
+  for (const child of children) {
+    const { rows: [existingPending] } = await pool.query(
+      "SELECT * FROM next_steps WHERE child_id = $1 AND status = 'pending' ORDER BY suggested_at DESC LIMIT 1",
+      [child.id],
+    );
+    if (existingPending) {
+      results.push({ child_id: child.id, child_name: child.name, generated: false, next_step: existingPending });
+      continue;
+    }
+
+    const { rows: recentObs } = await pool.query(
+      'SELECT * FROM observations WHERE child_id = $1 AND captured_at >= $2 ORDER BY captured_at DESC LIMIT 5',
+      [String(child.id), cutoff],
+    );
+    const suggestion = composeNextStepSuggestion(child, recentObs.map(parseObservationRow));
+    if (!suggestion) {
+      results.push({ child_id: child.id, child_name: child.name, generated: false, next_step: null, reason: 'not enough recent observation data' });
+      continue;
+    }
+
+    const { rows: [row] } = await pool.query(
+      'INSERT INTO next_steps (child_id, type, title, rationale, suggested_at) VALUES ($1, $2, $3, $4, $5) RETURNING *',
+      [child.id, suggestion.type, suggestion.title, suggestion.rationale, nowIso()],
+    );
+    results.push({ child_id: child.id, child_name: child.name, generated: true, next_step: row });
+  }
+  res.status(201).json(results);
 }));
 
 app.get('/api/health', ah(async (_req, res) => {
