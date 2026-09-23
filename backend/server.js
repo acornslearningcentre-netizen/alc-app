@@ -18,7 +18,7 @@ import {
   trim, optional, cleanPriority, isEmail, toBool,
   PROSPECT_STATUSES, ASSESSMENT_STATUSES, OBSERVATION_KINDS,
   cleanProspectStatus, cleanAssessmentStatus, cleanObservationKind,
-  cleanTone, cleanPronoun, cleanFlowState, isIsoDate, isTimeHHMM, cleanNextStepStatus,
+  cleanTone, cleanPronoun, cleanFlowState, isIsoDate, isTimeHHMM, cleanNextStepStatus, cleanDay, cleanPlanStatus,
   parsePositiveIntId, parseCorsOrigins,
 } from './lib/validators.js';
 import { composeDraftReport } from './lib/report-draft.js';
@@ -1696,6 +1696,39 @@ app.get('/api/lesson-plans', requireAuth, requireRole('teacher', 'leader'), ah(a
     byPlan.get(s.lesson_plan_id).push(s);
   }
   res.json(plans.map((p) => ({ ...p, students: byPlan.get(p.id) ?? [] })));
+}));
+
+// SCRUM-48 — creates a new lesson slot. Per-student status/activity/note
+// isn't set here — that's PATCH /api/lesson-plans/:id/students/:childId
+// (SCRUM-49), so a fresh lesson starts with no students attached.
+app.post('/api/lesson-plans', requireAuth, requireRole('teacher', 'leader'), ah(async (req, res) => {
+  const b = req.body ?? {};
+  const day = cleanDay(b.day);
+  if (!day) return res.status(400).json({ error: 'day must be one of: Mon, Tue, Wed, Thu, Fri' });
+  const time = trim(b.time);
+  if (!isTimeHHMM(time)) return res.status(400).json({ error: 'time is required and must be HH:MM (24hr)' });
+  const subject = trim(b.subject);
+  if (!subject) return res.status(400).json({ error: 'subject is required' });
+  const title = trim(b.title);
+  if (!title) return res.status(400).json({ error: 'title is required' });
+  const weekOf = trim(b.week_of);
+  if (!isIsoDate(weekOf)) return res.status(400).json({ error: 'week_of is required and must be YYYY-MM-DD' });
+
+  let teacherId;
+  if (req.user.role === 'leader') {
+    teacherId = parsePositiveIntId(b.teacher_id);
+    if (!teacherId || !await getTeacher(teacherId)) return res.status(400).json({ error: 'teacher_id does not reference a real teacher' });
+  } else {
+    teacherId = parsePositiveIntId(req.user.teacher_id);
+    if (!teacherId) return res.status(400).json({ error: 'your account is not linked to a teacher record yet' });
+  }
+
+  const { rows: [row] } = await pool.query(
+    `INSERT INTO lesson_plans (teacher_id, day, week_of, time, subject, title, summary)
+     VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
+    [teacherId, day, weekOf, time, subject, title, optional(b.summary)],
+  );
+  res.status(201).json({ ...row, students: [] });
 }));
 
 app.get('/api/health', ah(async (_req, res) => {

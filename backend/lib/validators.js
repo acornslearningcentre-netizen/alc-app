@@ -35,6 +35,12 @@ export const cleanFlowState = (v) => (FLOW_STATES.has(trim(v)) ? trim(v) : null)
 export const NEXT_STEP_STATUSES = new Set(['pending', 'accepted', 'dismissed']);
 export const cleanNextStepStatus = (v) => (NEXT_STEP_STATUSES.has(trim(v)) ? trim(v) : null);
 
+export const DAYS = new Set(['Mon', 'Tue', 'Wed', 'Thu', 'Fri']);
+export const cleanDay = (v) => (DAYS.has(trim(v)) ? trim(v) : null);
+
+export const PLAN_STATUSES = new Set(['accepted', 'edited', 'pending']);
+export const cleanPlanStatus = (v) => (PLAN_STATUSES.has(trim(v)) ? trim(v) : null);
+
 export const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 export const isIsoDate = (v) => ISO_DATE_RE.test(trim(v));
 
