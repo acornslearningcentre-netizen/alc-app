@@ -3,7 +3,7 @@ import {
   trim, optional, cleanPriority, isEmail, toBool,
   cleanProspectStatus, cleanAssessmentStatus, cleanObservationKind,
   cleanTone, cleanPronoun, cleanFlowState, isIsoDate, isTimeHHMM,
-  cleanNextStepStatus,
+  cleanNextStepStatus, cleanDay, cleanPlanStatus,
   parsePositiveIntId, parseCorsOrigins,
 } from './validators.js';
 
@@ -103,6 +103,15 @@ describe('status cleaners', () => {
   it('cleanNextStepStatus accepts only known statuses', () => {
     expect(cleanNextStepStatus('accepted')).toBe('accepted');
     expect(cleanNextStepStatus('bogus')).toBe(null);
+  });
+  it('cleanDay accepts only known weekday abbreviations', () => {
+    expect(cleanDay('Wed')).toBe('Wed');
+    expect(cleanDay('Wednesday')).toBe(null);
+    expect(cleanDay('bogus')).toBe(null);
+  });
+  it('cleanPlanStatus accepts only known statuses', () => {
+    expect(cleanPlanStatus('edited')).toBe('edited');
+    expect(cleanPlanStatus('bogus')).toBe(null);
   });
 });
 
