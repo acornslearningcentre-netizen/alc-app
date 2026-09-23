@@ -1842,6 +1842,57 @@ app.get('/api/children/:id/progress', requireAuth, requireRole('teacher', 'leade
   res.json({ child_id: child.id, child_name: child.name, trend: snapshots[0]?.trend ?? null, snapshots });
 }));
 
+// SCRUM-53 — aggregates real per-child snapshots (computing/upserting each
+// child's today first, same as the single-child endpoint) into a genuine
+// class-wide average, not a placeholder figure. A class trend is computed
+// the same way an individual child's is — comparing today's class average
+// against the average of each child's previous snapshot.
+const average = (values) => {
+  const nums = values.filter((v) => v !== null && v !== undefined);
+  return nums.length ? Math.round((nums.reduce((a, b) => a + b, 0) / nums.length) * 10) / 10 : null;
+};
+
+app.get('/api/progress/class', requireAuth, requireRole('teacher', 'leader'), ah(async (req, res) => {
+  let teacherId;
+  if (req.user.role === 'leader') {
+    teacherId = parsePositiveIntId(req.query.teacher_id);
+    if (!teacherId || !await getTeacher(teacherId)) return res.status(400).json({ error: 'teacher_id does not reference a real teacher' });
+  } else {
+    teacherId = parsePositiveIntId(req.user.teacher_id);
+    if (!teacherId) return res.status(400).json({ error: 'your account is not linked to a teacher record yet' });
+  }
+
+  const { rows: children } = await pool.query('SELECT * FROM children WHERE teacher_id = $1 ORDER BY name', [teacherId]);
+  const today = nowIso().slice(0, 10);
+
+  const perChild = [];
+  for (const child of children) {
+    const snapshot = await computeAndSaveSnapshot(child.id, today);
+    const { rows: [previous] } = await pool.query(
+      'SELECT mastery FROM progress_snapshots WHERE child_id = $1 AND date < $2 ORDER BY date DESC LIMIT 1',
+      [child.id, today],
+    );
+    perChild.push({ child_id: child.id, child_name: child.name, snapshot, previousMastery: previous?.mastery ?? null });
+  }
+
+  const avgMastery = average(perChild.map((c) => c.snapshot.mastery));
+  const previousAvgMastery = average(perChild.map((c) => c.previousMastery));
+
+  res.json({
+    teacher_id: teacherId,
+    date: today,
+    child_count: children.length,
+    avg_mastery: avgMastery,
+    avg_attendance: average(perChild.map((c) => c.snapshot.attendance)),
+    avg_streak: average(perChild.map((c) => c.snapshot.streak)),
+    trend: computeTrend(avgMastery, previousAvgMastery),
+    children: perChild.map((c) => ({
+      child_id: c.child_id, child_name: c.child_name,
+      mastery: c.snapshot.mastery, attendance: c.snapshot.attendance, streak: c.snapshot.streak, trend: c.snapshot.trend,
+    })),
+  });
+}));
+
 app.get('/api/health', ah(async (_req, res) => {
   await pool.query('SELECT 1');
   res.json({ ok: true });
