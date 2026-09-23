@@ -286,6 +286,25 @@ async function migrate() {
     );
     CREATE INDEX IF NOT EXISTS idx_lesson_plan_students_plan ON lesson_plan_students(lesson_plan_id);
 
+    -- Child & Class Progress Tracking (SCRUM-50/51) — replaces the fixed
+    -- mastery/attendance/streak/trend numbers with real computed ones. One
+    -- row per child per day (UNIQUE below); GET /api/children/:id/progress
+    -- (SCRUM-52) computes and upserts today's row from real observations and
+    -- lesson-plan activity on every call, rather than needing a separate
+    -- write endpoint — re-running the calculation updates that day's row,
+    -- it never duplicates it.
+    CREATE TABLE IF NOT EXISTS progress_snapshots (
+      id         SERIAL PRIMARY KEY,
+      child_id   INTEGER NOT NULL REFERENCES children(id) ON DELETE CASCADE,
+      date       TEXT NOT NULL,
+      mastery    REAL,
+      attendance REAL,
+      streak     INTEGER,
+      trend      TEXT CHECK (trend IN ('up','down','flat','steady')),
+      UNIQUE (child_id, date)
+    );
+    CREATE INDEX IF NOT EXISTS idx_progress_child_date ON progress_snapshots(child_id, date DESC);
+
     -- Auth (SCRUM-16 / SCRUM-17): real accounts and sessions, replacing the
     -- passcode-in-the-frontend-bundle login. Staff (teacher/leader) sign in
     -- with email+password; parent/student sign in with a short passcode.
