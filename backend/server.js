@@ -306,6 +306,33 @@ async function migrate() {
     );
     CREATE INDEX IF NOT EXISTS idx_progress_child_date ON progress_snapshots(child_id, date DESC);
 
+    -- Teacher ⇄ Parent Messaging (SCRUM-54/55) — real, persistent
+    -- conversations replacing the fixed sample threads. One thread per
+    -- teacher+child pair (shared by every parent/carer of that child — the
+    -- conversation is with the family, not a single parent account).
+    -- Deleting a thread cascades to its messages, no orphans left behind.
+    CREATE TABLE IF NOT EXISTS message_threads (
+      id          SERIAL PRIMARY KEY,
+      teacher_id  INTEGER NOT NULL REFERENCES teachers(id),
+      child_id    INTEGER NOT NULL REFERENCES children(id),
+      parent_name TEXT NOT NULL,
+      created_at  TEXT NOT NULL,
+      UNIQUE (teacher_id, child_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_threads_teacher ON message_threads(teacher_id);
+    CREATE INDEX IF NOT EXISTS idx_threads_child   ON message_threads(child_id);
+
+    CREATE TABLE IF NOT EXISTS messages (
+      id          SERIAL PRIMARY KEY,
+      thread_id   INTEGER NOT NULL REFERENCES message_threads(id) ON DELETE CASCADE,
+      sender_role TEXT NOT NULL CHECK (sender_role IN ('teacher','parent')),
+      sender_name TEXT NOT NULL,
+      body        TEXT NOT NULL,
+      sent_at     TEXT NOT NULL,
+      read_at     TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_messages_thread ON messages(thread_id, sent_at);
+
     -- Auth (SCRUM-16 / SCRUM-17): real accounts and sessions, replacing the
     -- passcode-in-the-frontend-bundle login. Staff (teacher/leader) sign in
     -- with email+password; parent/student sign in with a short passcode.
