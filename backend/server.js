@@ -1662,6 +1662,42 @@ app.post('/api/ai/brief', requireAuth, requireRole('teacher', 'leader'), ah(asyn
   res.status(201).json(results);
 }));
 
+// ── /api/lesson-plans ────────────────────────────────────────────────────────
+// Lesson Planning (SCRUM-45/47) — a teacher's real weekly plan, replacing
+// the fixed sample week. day is stored as 'Mon'..'Fri' text, which sorts
+// wrong alphabetically (Fri, Mon, Thu, Tue, Wed) — DAY_ORDER_SQL fixes that.
+const DAY_ORDER_SQL = "CASE day WHEN 'Mon' THEN 1 WHEN 'Tue' THEN 2 WHEN 'Wed' THEN 3 WHEN 'Thu' THEN 4 WHEN 'Fri' THEN 5 END";
+
+app.get('/api/lesson-plans', requireAuth, requireRole('teacher', 'leader'), ah(async (req, res) => {
+  const weekOf = trim(req.query.week_of);
+  if (!isIsoDate(weekOf)) return res.status(400).json({ error: 'week_of is required and must be YYYY-MM-DD' });
+
+  let teacherId;
+  if (req.user.role === 'leader') {
+    teacherId = parsePositiveIntId(req.query.teacher_id);
+    if (!teacherId) return res.status(400).json({ error: 'teacher_id is required' });
+  } else {
+    teacherId = parsePositiveIntId(req.user.teacher_id);
+  }
+
+  const { rows: plans } = await pool.query(
+    `SELECT * FROM lesson_plans WHERE teacher_id = $1 AND week_of = $2 ORDER BY ${DAY_ORDER_SQL}, time ASC`,
+    [teacherId, weekOf],
+  );
+  if (plans.length === 0) return res.json([]);
+
+  const { rows: students } = await pool.query(
+    'SELECT * FROM lesson_plan_students WHERE lesson_plan_id = ANY($1::int[])',
+    [plans.map((p) => p.id)],
+  );
+  const byPlan = new Map();
+  for (const s of students) {
+    if (!byPlan.has(s.lesson_plan_id)) byPlan.set(s.lesson_plan_id, []);
+    byPlan.get(s.lesson_plan_id).push(s);
+  }
+  res.json(plans.map((p) => ({ ...p, students: byPlan.get(p.id) ?? [] })));
+}));
+
 app.get('/api/health', ah(async (_req, res) => {
   await pool.query('SELECT 1');
   res.json({ ok: true });
