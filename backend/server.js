@@ -1731,6 +1731,47 @@ app.post('/api/lesson-plans', requireAuth, requireRole('teacher', 'leader'), ah(
   res.status(201).json({ ...row, students: [] });
 }));
 
+// SCRUM-49 — updates (or, if none exists yet, creates) one student's
+// status/activity/note within a lesson. There's no separate "add a student
+// to a lesson" endpoint, so this upserts — UNIQUE(lesson_plan_id, child_id)
+// on lesson_plan_students guarantees exactly one row per student per lesson,
+// so changing one student's status can never touch any other student's row.
+app.patch('/api/lesson-plans/:id/students/:childId', requireAuth, requireRole('teacher', 'leader'), ah(async (req, res) => {
+  const planId = idParam(req, res); if (!planId) return;
+  const childId = parsePositiveIntId(req.params.childId);
+  if (!childId) return res.status(400).json({ error: 'invalid child id' });
+
+  const { rows: [plan] } = await pool.query('SELECT * FROM lesson_plans WHERE id = $1', [planId]);
+  if (!plan || !canSeeFlowStep(req.user.role, parsePositiveIntId(req.user.teacher_id), plan.teacher_id)) {
+    return res.status(404).json({ error: 'not found' });
+  }
+  if (!await getChild(childId)) return res.status(404).json({ error: 'child not found' });
+
+  const b = req.body ?? {};
+  const { rows: [existing] } = await pool.query(
+    'SELECT * FROM lesson_plan_students WHERE lesson_plan_id = $1 AND child_id = $2',
+    [planId, childId],
+  );
+
+  let status = existing?.status ?? 'pending';
+  if (b.status !== undefined) {
+    status = cleanPlanStatus(b.status);
+    if (!status) return res.status(400).json({ error: 'status must be one of: accepted, edited, pending' });
+  }
+  const activity = b.activity !== undefined ? trim(b.activity) : existing?.activity;
+  if (!activity) return res.status(400).json({ error: 'activity is required' });
+  const note = b.note !== undefined ? optional(b.note) : (existing?.note ?? null);
+
+  const { rows: [row] } = await pool.query(
+    `INSERT INTO lesson_plan_students (lesson_plan_id, child_id, status, activity, note)
+     VALUES ($1, $2, $3, $4, $5)
+     ON CONFLICT (lesson_plan_id, child_id) DO UPDATE SET status = $3, activity = $4, note = $5
+     RETURNING *`,
+    [planId, childId, status, activity, note],
+  );
+  res.json(row);
+}));
+
 app.get('/api/health', ah(async (_req, res) => {
   await pool.query('SELECT 1');
   res.json({ ok: true });
