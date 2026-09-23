@@ -2017,6 +2017,29 @@ app.get('/api/threads/:id/messages', requireAuth, requireRole('teacher', 'leader
   res.json(rows);
 }));
 
+// SCRUM-58 — sends a message. Teacher/parent only (not leader — 'leader'
+// isn't a valid sender_role, and posting into a family's conversation isn't
+// what the leader's oversight access is for). sender_role/sender_name come
+// from the authenticated caller, never the request body — a client can't
+// spoof who a message is from.
+app.post('/api/threads/:id/messages', requireAuth, requireRole('teacher', 'parent'), ah(async (req, res) => {
+  const id = idParam(req, res); if (!id) return;
+  const thread = await getMessageThread(id);
+  if (!thread || !canSeeThread(req.user.role, parsePositiveIntId(req.user.teacher_id), parsePositiveIntId(req.user.child_id), thread)) {
+    return res.status(404).json({ error: 'not found' });
+  }
+
+  const body = trim(req.body?.body);
+  if (!body) return res.status(400).json({ error: 'body is required' });
+
+  const { rows: [row] } = await pool.query(
+    `INSERT INTO messages (thread_id, sender_role, sender_name, body, sent_at)
+     VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+    [id, req.user.role, req.user.name, body, nowIso()],
+  );
+  res.status(201).json(row);
+}));
+
 app.get('/api/health', ah(async (_req, res) => {
   await pool.query('SELECT 1');
   res.json({ ok: true });
