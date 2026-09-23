@@ -2063,6 +2063,46 @@ app.post('/api/threads/:id/messages', requireAuth, requireRole('teacher', 'paren
   res.status(201).json(row);
 }));
 
+// ── /api/assistant ───────────────────────────────────────────────────────────
+// AI Assistant Chat (SCRUM-59/62) — retrieves this user's most recent
+// conversation about a child (or their general, childless conversation if
+// no child_id is given). There's no POST /api/assistant/conversations —
+// a conversation is created lazily by the first ask (SCRUM-61), so an
+// empty history here just means "nothing asked yet", not an error.
+app.get('/api/assistant/history', requireAuth, requireRole('teacher', 'parent'), ah(async (req, res) => {
+  const childId = req.query.child_id !== undefined ? parsePositiveIntId(req.query.child_id) : null;
+  if (req.query.child_id !== undefined && !childId) return res.status(400).json({ error: 'child_id must be a positive integer' });
+
+  if (childId) {
+    const child = await getChild(childId);
+    if (!child) return res.status(404).json({ error: 'child not found' });
+    if (req.user.role === 'parent' && parsePositiveIntId(req.user.child_id) !== childId) {
+      return res.status(404).json({ error: 'not found' });
+    }
+    if (req.user.role === 'teacher' && !canSeeChild('teacher', parsePositiveIntId(req.user.teacher_id), child.teacher_id)) {
+      return res.status(404).json({ error: 'not found' });
+    }
+  }
+
+  const { rows: [conversation] } = childId !== null
+    ? await pool.query(
+        'SELECT * FROM assistant_conversations WHERE user_id = $1 AND role = $2 AND child_id = $3 ORDER BY created_at DESC LIMIT 1',
+        [req.user.id, req.user.role, childId],
+      )
+    : await pool.query(
+        'SELECT * FROM assistant_conversations WHERE user_id = $1 AND role = $2 AND child_id IS NULL ORDER BY created_at DESC LIMIT 1',
+        [req.user.id, req.user.role],
+      );
+
+  if (!conversation) return res.json({ conversation_id: null, child_id: childId, messages: [] });
+
+  const { rows: messages } = await pool.query(
+    'SELECT * FROM assistant_messages WHERE conversation_id = $1 ORDER BY created_at ASC',
+    [conversation.id],
+  );
+  res.json({ conversation_id: conversation.id, child_id: conversation.child_id, messages });
+}));
+
 app.get('/api/health', ah(async (_req, res) => {
   await pool.query('SELECT 1');
   res.json({ ok: true });
