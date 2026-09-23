@@ -26,6 +26,7 @@ import { isAllowedMimeType, extensionFor, MAX_UPLOAD_BYTES } from './lib/media.j
 import { sendReportEmail } from './lib/report-email.js';
 import { parseChildRow, toJsonArrayColumn, parseJsonArray, canSeeChild } from './lib/children.js';
 import { canSeeFlowStep } from './lib/flow.js';
+import { canSeeThread } from './lib/messaging.js';
 import { composeNextStepSuggestion } from './lib/next-steps.js';
 import { computeMastery, computeAttendance, computeStreak, computeTrend } from './lib/progress.js';
 
@@ -1985,6 +1986,35 @@ app.get('/api/threads', requireAuth, requireRole('teacher', 'leader', 'parent'),
   const unreadByThread = new Map(unreadRows.map((r) => [r.thread_id, r.unread_count]));
 
   res.json(threads.map((t) => ({ ...t, unread_count: unreadByThread.get(t.id) ?? 0 })));
+}));
+
+const getMessageThread = async (id) => {
+  const { rows: [row] } = await pool.query('SELECT * FROM message_threads WHERE id = $1', [id]);
+  return row ?? null;
+};
+
+// SCRUM-57 — loads a conversation in order, and marks the other party's
+// messages read as a side effect (opening a thread is how "read" happens —
+// there's no separate mark-as-read endpoint in this sprint's scope). A
+// leader viewing doesn't mark anything read, since they aren't a real
+// participant in the conversation.
+app.get('/api/threads/:id/messages', requireAuth, requireRole('teacher', 'leader', 'parent'), ah(async (req, res) => {
+  const id = idParam(req, res); if (!id) return;
+  const thread = await getMessageThread(id);
+  if (!thread || !canSeeThread(req.user.role, parsePositiveIntId(req.user.teacher_id), parsePositiveIntId(req.user.child_id), thread)) {
+    return res.status(404).json({ error: 'not found' });
+  }
+
+  if (req.user.role === 'teacher' || req.user.role === 'parent') {
+    const otherRole = req.user.role === 'teacher' ? 'parent' : 'teacher';
+    await pool.query(
+      'UPDATE messages SET read_at = $1 WHERE thread_id = $2 AND sender_role = $3 AND read_at IS NULL',
+      [nowIso(), id, otherRole],
+    );
+  }
+
+  const { rows } = await pool.query('SELECT * FROM messages WHERE thread_id = $1 ORDER BY sent_at ASC', [id]);
+  res.json(rows);
 }));
 
 app.get('/api/health', ah(async (_req, res) => {
