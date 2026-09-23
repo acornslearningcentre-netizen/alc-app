@@ -259,6 +259,33 @@ async function migrate() {
     CREATE INDEX IF NOT EXISTS idx_next_steps_child  ON next_steps(child_id);
     CREATE INDEX IF NOT EXISTS idx_next_steps_status ON next_steps(status);
 
+    -- Lesson Planning (SCRUM-45/46) — the weekly lesson plan and each
+    -- student's per-lesson status, replacing the fixed sample week. A
+    -- student can only have one status row per lesson (UNIQUE below);
+    -- deleting a lesson plan cascades to its per-student rows.
+    CREATE TABLE IF NOT EXISTS lesson_plans (
+      id         SERIAL PRIMARY KEY,
+      teacher_id INTEGER NOT NULL REFERENCES teachers(id),
+      day        TEXT NOT NULL CHECK (day IN ('Mon','Tue','Wed','Thu','Fri')),
+      week_of    TEXT NOT NULL,           -- ISO date of that week's Monday
+      time       TEXT NOT NULL,           -- HH:MM, 24hr
+      subject    TEXT NOT NULL,
+      title      TEXT NOT NULL,
+      summary    TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_lesson_plans_teacher_week ON lesson_plans(teacher_id, week_of);
+
+    CREATE TABLE IF NOT EXISTS lesson_plan_students (
+      id             SERIAL PRIMARY KEY,
+      lesson_plan_id INTEGER NOT NULL REFERENCES lesson_plans(id) ON DELETE CASCADE,
+      child_id       INTEGER NOT NULL REFERENCES children(id) ON DELETE CASCADE,
+      status         TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('accepted','edited','pending')),
+      activity       TEXT NOT NULL,
+      note           TEXT,
+      UNIQUE (lesson_plan_id, child_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_lesson_plan_students_plan ON lesson_plan_students(lesson_plan_id);
+
     -- Auth (SCRUM-16 / SCRUM-17): real accounts and sessions, replacing the
     -- passcode-in-the-frontend-bundle login. Staff (teacher/leader) sign in
     -- with email+password; parent/student sign in with a short passcode.
