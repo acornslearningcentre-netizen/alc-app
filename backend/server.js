@@ -334,6 +334,29 @@ async function migrate() {
     );
     CREATE INDEX IF NOT EXISTS idx_messages_thread ON messages(thread_id, sent_at);
 
+    -- AI Assistant Chat (SCRUM-59/60) — replaces the canned "Ask about
+    -- [child]" answers with real, remembered conversations. child_id is
+    -- nullable (a conversation is "usually" about one child, per the
+    -- ticket, but the schema doesn't force it). Deleting a conversation
+    -- cascades to its messages.
+    CREATE TABLE IF NOT EXISTS assistant_conversations (
+      id         SERIAL PRIMARY KEY,
+      user_id    INTEGER NOT NULL REFERENCES users(id),
+      role       TEXT NOT NULL CHECK (role IN ('teacher','parent')),
+      child_id   INTEGER REFERENCES children(id),
+      created_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_assistant_conv_user ON assistant_conversations(user_id);
+
+    CREATE TABLE IF NOT EXISTS assistant_messages (
+      id              SERIAL PRIMARY KEY,
+      conversation_id INTEGER NOT NULL REFERENCES assistant_conversations(id) ON DELETE CASCADE,
+      sender          TEXT NOT NULL CHECK (sender IN ('user','assistant')),
+      text            TEXT NOT NULL,
+      created_at      TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_assistant_msg_conv ON assistant_messages(conversation_id, created_at);
+
     -- Auth (SCRUM-16 / SCRUM-17): real accounts and sessions, replacing the
     -- passcode-in-the-frontend-bundle login. Staff (teacher/leader) sign in
     -- with email+password; parent/student sign in with a short passcode.
