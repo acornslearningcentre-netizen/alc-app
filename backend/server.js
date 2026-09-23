@@ -1920,6 +1920,73 @@ app.get('/api/progress/class', requireAuth, requireRole('teacher', 'leader'), ah
   });
 }));
 
+// ── /api/threads ─────────────────────────────────────────────────────────────
+// Teacher ⇄ Parent Messaging (SCRUM-54/56) — real, persistent conversations.
+// There's no POST /api/threads in this sprint's scope, so a thread is
+// found-or-created on access (same "compute on read" pattern as Progress
+// Tracking's snapshots) — ensureThread relies on message_threads'
+// UNIQUE(teacher_id, child_id) to make that safe under concurrent calls.
+const ensureThread = async (teacherId, childId) => {
+  const { rows: [existing] } = await pool.query(
+    'SELECT * FROM message_threads WHERE teacher_id = $1 AND child_id = $2',
+    [teacherId, childId],
+  );
+  if (existing) return existing;
+  const { rows: [parent] } = await pool.query('SELECT name FROM parents WHERE child_id = $1 ORDER BY id LIMIT 1', [childId]);
+  const { rows: [row] } = await pool.query(
+    `INSERT INTO message_threads (teacher_id, child_id, parent_name, created_at)
+     VALUES ($1, $2, $3, $4)
+     ON CONFLICT (teacher_id, child_id) DO UPDATE SET teacher_id = EXCLUDED.teacher_id
+     RETURNING *`,
+    [teacherId, childId, parent?.name || 'Parent', nowIso()],
+  );
+  return row;
+};
+
+app.get('/api/threads', requireAuth, requireRole('teacher', 'leader', 'parent'), ah(async (req, res) => {
+  let threads;
+  if (req.user.role === 'parent') {
+    const childId = parsePositiveIntId(req.user.child_id);
+    const child = childId ? await getChild(childId) : null;
+    if (!child || !child.teacher_id) return res.json([]);
+    await ensureThread(child.teacher_id, childId);
+    ({ rows: threads } = await pool.query(
+      'SELECT mt.*, c.name AS child_name FROM message_threads mt JOIN children c ON c.id = mt.child_id WHERE mt.child_id = $1 ORDER BY mt.created_at DESC',
+      [childId],
+    ));
+  } else if (req.user.role === 'teacher') {
+    const teacherId = parsePositiveIntId(req.user.teacher_id);
+    if (!teacherId) return res.json([]);
+    const { rows: children } = await pool.query('SELECT id FROM children WHERE teacher_id = $1', [teacherId]);
+    for (const c of children) await ensureThread(teacherId, c.id);
+    ({ rows: threads } = await pool.query(
+      'SELECT mt.*, c.name AS child_name FROM message_threads mt JOIN children c ON c.id = mt.child_id WHERE mt.teacher_id = $1 ORDER BY mt.created_at DESC',
+      [teacherId],
+    ));
+  } else {
+    const teacherId = req.query.teacher_id !== undefined ? parsePositiveIntId(req.query.teacher_id) : null;
+    if (req.query.teacher_id !== undefined && !teacherId) return res.status(400).json({ error: 'teacher_id must be a positive integer' });
+    ({ rows: threads } = teacherId
+      ? await pool.query('SELECT mt.*, c.name AS child_name FROM message_threads mt JOIN children c ON c.id = mt.child_id WHERE mt.teacher_id = $1 ORDER BY mt.created_at DESC', [teacherId])
+      : await pool.query('SELECT mt.*, c.name AS child_name FROM message_threads mt JOIN children c ON c.id = mt.child_id ORDER BY mt.created_at DESC'));
+  }
+
+  if (threads.length === 0) return res.json([]);
+
+  // Unread = from the other party, for a teacher/parent participant; for a
+  // leader (not a participant in the conversation) it's "anything unread".
+  let unreadSql = 'SELECT thread_id, COUNT(*)::int AS unread_count FROM messages WHERE thread_id = ANY($1::int[]) AND read_at IS NULL';
+  const unreadParams = [threads.map((t) => t.id)];
+  if (req.user.role === 'teacher' || req.user.role === 'parent') {
+    unreadSql += ' AND sender_role = $2';
+    unreadParams.push(req.user.role === 'teacher' ? 'parent' : 'teacher');
+  }
+  const { rows: unreadRows } = await pool.query(`${unreadSql} GROUP BY thread_id`, unreadParams);
+  const unreadByThread = new Map(unreadRows.map((r) => [r.thread_id, r.unread_count]));
+
+  res.json(threads.map((t) => ({ ...t, unread_count: unreadByThread.get(t.id) ?? 0 })));
+}));
+
 app.get('/api/health', ah(async (_req, res) => {
   await pool.query('SELECT 1');
   res.json({ ok: true });
