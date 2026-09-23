@@ -27,6 +27,7 @@ import { sendReportEmail } from './lib/report-email.js';
 import { parseChildRow, toJsonArrayColumn, parseJsonArray, canSeeChild } from './lib/children.js';
 import { canSeeFlowStep } from './lib/flow.js';
 import { composeNextStepSuggestion } from './lib/next-steps.js';
+import { computeMastery, computeAttendance, computeStreak, computeTrend } from './lib/progress.js';
 
 const { Pool } = pg;
 const PORT = Number(process.env.PORT) || 3000;
@@ -1789,6 +1790,56 @@ app.patch('/api/lesson-plans/:id/students/:childId', requireAuth, requireRole('t
     [planId, childId, status, activity, note],
   );
   res.json(row);
+}));
+
+// ── /api/children/:id/progress, /api/progress/class ────────────────────────
+// Child & Class Progress Tracking (SCRUM-50/52/53) — every number here comes
+// from real observations and real lesson-plan decisions, computed fresh
+// (and upserted into progress_snapshots) on each call. See lib/progress.js
+// for the actual calculations; this is just the DB glue around them.
+async function computeAndSaveSnapshot(childId, forDate) {
+  const { rows: obsRows } = await pool.query('SELECT captured_at FROM observations WHERE child_id = $1', [String(childId)]);
+  const observationDates = obsRows.map((r) => r.captured_at);
+
+  const { rows: studentRows } = await pool.query('SELECT status FROM lesson_plan_students WHERE child_id = $1', [childId]);
+
+  const mastery = computeMastery(studentRows);
+  const attendance = computeAttendance(observationDates, forDate);
+  const streak = computeStreak(observationDates, forDate);
+
+  const { rows: [previous] } = await pool.query(
+    'SELECT mastery FROM progress_snapshots WHERE child_id = $1 AND date < $2 ORDER BY date DESC LIMIT 1',
+    [childId, forDate],
+  );
+  const trend = computeTrend(mastery, previous?.mastery ?? null);
+
+  const { rows: [row] } = await pool.query(
+    `INSERT INTO progress_snapshots (child_id, date, mastery, attendance, streak, trend)
+     VALUES ($1, $2, $3, $4, $5, $6)
+     ON CONFLICT (child_id, date) DO UPDATE SET mastery = $3, attendance = $4, streak = $5, trend = $6
+     RETURNING *`,
+    [childId, forDate, mastery, attendance, streak, trend],
+  );
+  return row;
+}
+
+app.get('/api/children/:id/progress', requireAuth, requireRole('teacher', 'leader'), ah(async (req, res) => {
+  const id = idParam(req, res); if (!id) return;
+  const child = await getChild(id);
+  if (!child || !canSeeChild(req.user.role, parsePositiveIntId(req.user.teacher_id), child.teacher_id)) {
+    return res.status(404).json({ error: 'not found' });
+  }
+
+  const today = nowIso().slice(0, 10);
+  await computeAndSaveSnapshot(id, today);
+
+  const requestedDays = Number(req.query.days);
+  const days = Number.isInteger(requestedDays) && requestedDays > 0 ? requestedDays : 30;
+  const { rows: snapshots } = await pool.query(
+    'SELECT * FROM progress_snapshots WHERE child_id = $1 ORDER BY date DESC LIMIT $2',
+    [id, days],
+  );
+  res.json({ child_id: child.id, child_name: child.name, trend: snapshots[0]?.trend ?? null, snapshots });
 }));
 
 app.get('/api/health', ah(async (_req, res) => {
