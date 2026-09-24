@@ -27,6 +27,7 @@ import { sendReportEmail } from './lib/report-email.js';
 import { parseChildRow, toJsonArrayColumn, parseJsonArray, canSeeChild } from './lib/children.js';
 import { canSeeFlowStep } from './lib/flow.js';
 import { canSeeThread } from './lib/messaging.js';
+import { askAssistant } from './lib/assistant.js';
 import { composeNextStepSuggestion } from './lib/next-steps.js';
 import { computeMastery, computeAttendance, computeStreak, computeTrend } from './lib/progress.js';
 
@@ -2101,6 +2102,78 @@ app.get('/api/assistant/history', requireAuth, requireRole('teacher', 'parent'),
     [conversation.id],
   );
   res.json({ conversation_id: conversation.id, child_id: conversation.child_id, messages });
+}));
+
+// SCRUM-61 — asks the assistant a question about a child, grounded in that
+// child's real observations and latest progress snapshot (askAssistant,
+// lib/assistant.js — a genuine LLM call, not a template composer). Finds or
+// creates the (user, role, child) conversation, persists both the question
+// and the answer as they happen. Never marks anything sent if the model
+// call genuinely fails — same fail-loudly pattern as email delivery (SCRUM-88).
+app.post('/api/assistant/ask', requireAuth, requireRole('teacher', 'parent'), ah(async (req, res) => {
+  const childId = parsePositiveIntId(req.body?.child_id);
+  if (!childId) return res.status(400).json({ error: 'child_id is required' });
+  const question = trim(req.body?.question);
+  if (!question) return res.status(400).json({ error: 'question is required' });
+
+  const child = await getChild(childId);
+  if (!child) return res.status(404).json({ error: 'child not found' });
+  if (req.user.role === 'parent' && parsePositiveIntId(req.user.child_id) !== childId) {
+    return res.status(404).json({ error: 'not found' });
+  }
+  if (req.user.role === 'teacher' && !canSeeChild('teacher', parsePositiveIntId(req.user.teacher_id), child.teacher_id)) {
+    return res.status(404).json({ error: 'not found' });
+  }
+
+  let { rows: [conversation] } = await pool.query(
+    'SELECT * FROM assistant_conversations WHERE user_id = $1 AND role = $2 AND child_id = $3 ORDER BY created_at DESC LIMIT 1',
+    [req.user.id, req.user.role, childId],
+  );
+  if (!conversation) {
+    ({ rows: [conversation] } = await pool.query(
+      'INSERT INTO assistant_conversations (user_id, role, child_id, created_at) VALUES ($1, $2, $3, $4) RETURNING *',
+      [req.user.id, req.user.role, childId, nowIso()],
+    ));
+  }
+
+  const { rows: history } = await pool.query(
+    'SELECT sender, text FROM assistant_messages WHERE conversation_id = $1 ORDER BY created_at ASC',
+    [conversation.id],
+  );
+  const { rows: recentObs } = await pool.query(
+    'SELECT * FROM observations WHERE child_id = $1 ORDER BY captured_at DESC LIMIT 5',
+    [String(childId)],
+  );
+  const { rows: [latestProgress] } = await pool.query(
+    'SELECT mastery, attendance, streak, trend FROM progress_snapshots WHERE child_id = $1 ORDER BY date DESC LIMIT 1',
+    [childId],
+  );
+
+  let answer;
+  try {
+    answer = await askAssistant({
+      childName: child.name,
+      observations: recentObs.map(parseObservationRow),
+      progress: latestProgress || null,
+      history,
+      question,
+    });
+  } catch (err) {
+    console.error('POST /api/assistant/ask failed:', err);
+    return res.status(502).json({ error: `Could not get an answer from the assistant: ${err.message}` });
+  }
+
+  const ts = nowIso();
+  const { rows: [userMessage] } = await pool.query(
+    "INSERT INTO assistant_messages (conversation_id, sender, text, created_at) VALUES ($1, 'user', $2, $3) RETURNING *",
+    [conversation.id, question, ts],
+  );
+  const { rows: [assistantMessage] } = await pool.query(
+    "INSERT INTO assistant_messages (conversation_id, sender, text, created_at) VALUES ($1, 'assistant', $2, $3) RETURNING *",
+    [conversation.id, answer, nowIso()],
+  );
+
+  res.status(201).json({ conversation_id: conversation.id, messages: [userMessage, assistantMessage] });
 }));
 
 app.get('/api/health', ah(async (_req, res) => {
