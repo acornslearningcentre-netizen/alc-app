@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseJsonArray, parseChildRow, toJsonArrayColumn, canSeeChild } from './children.js';
+import { parseJsonArray, parseChildRow, toJsonArrayColumn, canSeeChild, canSeeChildProfile } from './children.js';
 
 describe('parseJsonArray', () => {
   it('parses a JSON array string', () => {
@@ -53,5 +53,35 @@ describe('canSeeChild', () => {
   });
   it('blocks an unlinked teacher (null teacher_id) even against an unassigned child', () => {
     expect(canSeeChild('teacher', null, null)).toBe(false);
+  });
+});
+
+describe('canSeeChildProfile', () => {
+  const child = { id: 2, teacherId: 3 };
+
+  it('lets a leader see any child', () => {
+    expect(canSeeChildProfile({ role: 'leader', teacherId: null, childId: null }, child)).toBe(true);
+  });
+  it('lets a teacher see a child in their own class', () => {
+    expect(canSeeChildProfile({ role: 'teacher', teacherId: 3, childId: null }, child)).toBe(true);
+  });
+  it('blocks a teacher from a child outside their class', () => {
+    expect(canSeeChildProfile({ role: 'teacher', teacherId: 9, childId: null }, child)).toBe(false);
+  });
+  it('lets a parent see their own child', () => {
+    expect(canSeeChildProfile({ role: 'parent', teacherId: null, childId: 2 }, child)).toBe(true);
+  });
+  it('blocks a parent from another family\'s child', () => {
+    expect(canSeeChildProfile({ role: 'parent', teacherId: null, childId: 9 }, child)).toBe(false);
+  });
+  it('lets a student see their own profile', () => {
+    expect(canSeeChildProfile({ role: 'student', teacherId: null, childId: 2 }, child)).toBe(true);
+  });
+  it('blocks a student from another child\'s profile', () => {
+    expect(canSeeChildProfile({ role: 'student', teacherId: null, childId: 9 }, child)).toBe(false);
+  });
+  it('blocks an unlinked parent/student (null childId)', () => {
+    expect(canSeeChildProfile({ role: 'parent', teacherId: null, childId: null }, child)).toBe(false);
+    expect(canSeeChildProfile({ role: 'student', teacherId: null, childId: null }, child)).toBe(false);
   });
 });

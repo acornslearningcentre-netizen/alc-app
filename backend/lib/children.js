@@ -31,3 +31,17 @@ export const toJsonArrayColumn = (v) => (Array.isArray(v) ? JSON.stringify(v) : 
  */
 export const canSeeChild = (userRole, userTeacherId, childTeacherId) =>
   userRole === 'leader' || (userTeacherId !== null && userTeacherId === childTeacherId);
+
+/**
+ * Same access rule as canSeeChild, extended to parent/student — used by
+ * Student Self-Service Progress (SCRUM-68), where a teacher, a leader, a
+ * parent, and the child themself can all legitimately view the same data.
+ * @param {{ role: string, teacherId: number|null, childId: number|null }} user
+ * @param {{ id: number, teacherId: number|null }} child
+ */
+export const canSeeChildProfile = (user, child) => {
+  if (user.role === 'leader') return true;
+  if (user.role === 'teacher') return canSeeChild('teacher', user.teacherId, child.teacherId);
+  if (user.role === 'parent' || user.role === 'student') return user.childId !== null && user.childId === child.id;
+  return false;
+};
