@@ -2268,6 +2268,34 @@ app.get('/api/children/:id/reports', requireAuth, requireRole('teacher', 'leader
   res.json(rows);
 }));
 
+// SCRUM-66 — a staff member approves a draft as final. Requires real
+// content, refuses a second sign-off, and records who + when in a way
+// this endpoint itself never lets be quietly changed afterwards (no
+// PATCH exists on child_reports — signed_off_by/signed_off_at are only
+// ever set here, once).
+app.post('/api/children/:id/reports/:reportId/sign-off', requireAuth, requireRole('teacher', 'leader'), ah(async (req, res) => {
+  const childId = idParam(req, res); if (!childId) return;
+  const reportId = parsePositiveIntId(req.params.reportId);
+  if (!reportId) return res.status(400).json({ error: 'invalid report id' });
+
+  const child = await getChild(childId);
+  if (!child || !canSeeChild(req.user.role, parsePositiveIntId(req.user.teacher_id), child.teacher_id)) {
+    return res.status(404).json({ error: 'not found' });
+  }
+  const report = await getChildReport(childId, reportId);
+  if (!report) return res.status(404).json({ error: 'not found' });
+
+  if (!trim(report.ai_draft)) return res.status(400).json({ error: 'this report has no content yet' });
+  if (report.signed_off_at) return res.status(409).json({ error: 'already signed off' });
+
+  const ts = nowIso();
+  const { rows: [row] } = await pool.query(
+    'UPDATE child_reports SET signed_off_at = $1, signed_off_by = $2, updated_at = $1 WHERE id = $3 RETURNING *',
+    [ts, req.user.name, reportId],
+  );
+  res.json(row);
+}));
+
 app.get('/api/health', ah(async (_req, res) => {
   await pool.query('SELECT 1');
   res.json({ ok: true });
