@@ -377,6 +377,36 @@ async function migrate() {
     );
     CREATE INDEX IF NOT EXISTS idx_child_reports_child ON child_reports(child_id);
 
+    -- Student Self-Service Progress (SCRUM-68/69) — saves the Garden,
+    -- Growing checklist, and Try Today choices for real, so they survive
+    -- beyond the current browser tab. Garden and activity choices keep a
+    -- full history (no UNIQUE constraint — re-watering/re-choosing adds a
+    -- new row); growing is idempotent (UNIQUE below — ticking twice never
+    -- duplicates).
+    CREATE TABLE IF NOT EXISTS student_garden (
+      id         SERIAL PRIMARY KEY,
+      child_id   INTEGER NOT NULL REFERENCES children(id) ON DELETE CASCADE,
+      plant_id   TEXT NOT NULL,
+      watered_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_garden_child ON student_garden(child_id);
+
+    CREATE TABLE IF NOT EXISTS student_growing (
+      id       SERIAL PRIMARY KEY,
+      child_id INTEGER NOT NULL REFERENCES children(id) ON DELETE CASCADE,
+      item     TEXT NOT NULL,
+      done_at  TEXT NOT NULL,
+      UNIQUE (child_id, item)
+    );
+
+    CREATE TABLE IF NOT EXISTS student_activity_choices (
+      id        SERIAL PRIMARY KEY,
+      child_id  INTEGER NOT NULL REFERENCES children(id) ON DELETE CASCADE,
+      activity  TEXT NOT NULL,
+      chosen_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_activity_choices_child ON student_activity_choices(child_id);
+
     -- Auth (SCRUM-16 / SCRUM-17): real accounts and sessions, replacing the
     -- passcode-in-the-frontend-bundle login. Staff (teacher/leader) sign in
     -- with email+password; parent/student sign in with a short passcode.
