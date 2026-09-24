@@ -2480,6 +2480,39 @@ app.post('/api/students/:childId/growing', requireAuth, requireRole('student'), 
   res.status(201).json(row);
 }));
 
+// ── /api/students/:childId/try-today ────────────────────────────────────────
+// SCRUM-74 — same broad read access as garden/growing, so a teacher can see
+// what a child chose to try, not just the child's own device.
+app.get('/api/students/:childId/try-today', requireAuth, requireRole('teacher', 'leader', 'parent', 'student'), ah(async (req, res) => {
+  const childId = parsePositiveIntId(req.params.childId);
+  if (!childId) return res.status(400).json({ error: 'invalid child id' });
+  const child = await getChild(childId);
+  if (!child || !canSeeChildProfile(childProfileUser(req.user), { id: child.id, teacherId: child.teacher_id })) {
+    return res.status(404).json({ error: 'not found' });
+  }
+
+  const { rows } = await pool.query('SELECT * FROM student_activity_choices WHERE child_id = $1 ORDER BY chosen_at DESC', [childId]);
+  res.json(rows);
+}));
+
+// SCRUM-75 — records a Try Today choice. Student-only, always inserts a
+// fresh row (no UNIQUE constraint, like garden) so choosing again keeps the
+// earlier choice on record rather than overwriting it.
+app.post('/api/students/:childId/try-today', requireAuth, requireRole('student'), ah(async (req, res) => {
+  const childId = parsePositiveIntId(req.params.childId);
+  if (!childId) return res.status(400).json({ error: 'invalid child id' });
+  if (parsePositiveIntId(req.user.child_id) !== childId) return res.status(404).json({ error: 'not found' });
+
+  const activity = trim(req.body?.activity);
+  if (!activity) return res.status(400).json({ error: 'activity is required' });
+
+  const { rows: [row] } = await pool.query(
+    'INSERT INTO student_activity_choices (child_id, activity, chosen_at) VALUES ($1, $2, $3) RETURNING *',
+    [childId, activity, nowIso()],
+  );
+  res.status(201).json(row);
+}));
+
 app.get('/api/health', ah(async (_req, res) => {
   await pool.query('SELECT 1');
   res.json({ ok: true });
