@@ -2443,6 +2443,21 @@ app.post('/api/students/:childId/garden', requireAuth, requireRole('student'), a
   res.status(201).json(row);
 }));
 
+// ── /api/students/:childId/growing ──────────────────────────────────────────
+// SCRUM-72 — same broad read access as garden; POST (idempotent ticking) is
+// SCRUM-73.
+app.get('/api/students/:childId/growing', requireAuth, requireRole('teacher', 'leader', 'parent', 'student'), ah(async (req, res) => {
+  const childId = parsePositiveIntId(req.params.childId);
+  if (!childId) return res.status(400).json({ error: 'invalid child id' });
+  const child = await getChild(childId);
+  if (!child || !canSeeChildProfile(childProfileUser(req.user), { id: child.id, teacherId: child.teacher_id })) {
+    return res.status(404).json({ error: 'not found' });
+  }
+
+  const { rows } = await pool.query('SELECT * FROM student_growing WHERE child_id = $1 ORDER BY done_at DESC', [childId]);
+  res.json(rows);
+}));
+
 app.get('/api/health', ah(async (_req, res) => {
   await pool.query('SELECT 1');
   res.json({ ok: true });
