@@ -2268,11 +2268,38 @@ app.get('/api/children/:id/reports', requireAuth, requireRole('teacher', 'leader
   res.json(rows);
 }));
 
+// Added during live testing of SCRUM-67 (send): the AI draft's own
+// reviewer-facing notes ("to be removed before the report goes to the
+// family") went out in a real email because nothing let staff edit the
+// draft between generation and sign-off — this epic's 4 tickets never
+// included one. Same pattern as PATCH /api/assessments/:id's report_draft
+// editing. Locked once signed off, same as that endpoint.
+app.patch('/api/children/:id/reports/:reportId', requireAuth, requireRole('teacher', 'leader'), ah(async (req, res) => {
+  const childId = idParam(req, res); if (!childId) return;
+  const reportId = parsePositiveIntId(req.params.reportId);
+  if (!reportId) return res.status(400).json({ error: 'invalid report id' });
+
+  const child = await getChild(childId);
+  if (!child || !canSeeChild(req.user.role, parsePositiveIntId(req.user.teacher_id), child.teacher_id)) {
+    return res.status(404).json({ error: 'not found' });
+  }
+  const report = await getChildReport(childId, reportId);
+  if (!report) return res.status(404).json({ error: 'not found' });
+  if (report.signed_off_at) return res.status(409).json({ error: 'this report is already signed off and final' });
+
+  const aiDraft = req.body?.ai_draft !== undefined ? optional(req.body.ai_draft) : report.ai_draft;
+  const { rows: [row] } = await pool.query(
+    'UPDATE child_reports SET ai_draft = $1, updated_at = $2 WHERE id = $3 RETURNING *',
+    [aiDraft, nowIso(), reportId],
+  );
+  res.json(row);
+}));
+
 // SCRUM-66 — a staff member approves a draft as final. Requires real
 // content, refuses a second sign-off, and records who + when in a way
-// this endpoint itself never lets be quietly changed afterwards (no
-// PATCH exists on child_reports — signed_off_by/signed_off_at are only
-// ever set here, once).
+// this endpoint itself never lets be quietly changed afterwards (only
+// PATCH above can touch ai_draft, and it's locked once signed off —
+// signed_off_by/signed_off_at are only ever set here, once).
 app.post('/api/children/:id/reports/:reportId/sign-off', requireAuth, requireRole('teacher', 'leader'), ah(async (req, res) => {
   const childId = idParam(req, res); if (!childId) return;
   const reportId = parsePositiveIntId(req.params.reportId);
