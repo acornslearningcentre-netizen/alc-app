@@ -24,7 +24,7 @@ import {
 import { composeDraftReport } from './lib/report-draft.js';
 import { isAllowedMimeType, extensionFor, MAX_UPLOAD_BYTES } from './lib/media.js';
 import { sendReportEmail } from './lib/report-email.js';
-import { parseChildRow, toJsonArrayColumn, parseJsonArray, canSeeChild } from './lib/children.js';
+import { parseChildRow, toJsonArrayColumn, parseJsonArray, canSeeChild, canSeeChildProfile } from './lib/children.js';
 import { canSeeFlowStep } from './lib/flow.js';
 import { canSeeThread } from './lib/messaging.js';
 import { askAssistant } from './lib/assistant.js';
@@ -2398,6 +2398,30 @@ app.post('/api/children/:id/reports/:reportId/send', requireAuth, requireRole('t
     [ts, reportId],
   );
   res.json(row);
+}));
+
+// ── /api/students/:childId/garden ───────────────────────────────────────────
+// Student Self-Service Progress (SCRUM-68/70) — replaces the browser-only
+// watering state with real, cross-device storage. Broad read access
+// (teacher/leader/parent/student, scoped by canSeeChildProfile) since a
+// teacher or parent legitimately wants visibility here; POST is the
+// student's own action, built in SCRUM-71.
+const childProfileUser = (user) => ({
+  role: user.role,
+  teacherId: parsePositiveIntId(user.teacher_id),
+  childId: parsePositiveIntId(user.child_id),
+});
+
+app.get('/api/students/:childId/garden', requireAuth, requireRole('teacher', 'leader', 'parent', 'student'), ah(async (req, res) => {
+  const childId = parsePositiveIntId(req.params.childId);
+  if (!childId) return res.status(400).json({ error: 'invalid child id' });
+  const child = await getChild(childId);
+  if (!child || !canSeeChildProfile(childProfileUser(req.user), { id: child.id, teacherId: child.teacher_id })) {
+    return res.status(404).json({ error: 'not found' });
+  }
+
+  const { rows } = await pool.query('SELECT * FROM student_garden WHERE child_id = $1 ORDER BY watered_at DESC', [childId]);
+  res.json(rows);
 }));
 
 app.get('/api/health', ah(async (_req, res) => {
