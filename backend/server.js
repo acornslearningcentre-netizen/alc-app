@@ -358,6 +358,24 @@ async function migrate() {
     );
     CREATE INDEX IF NOT EXISTS idx_assistant_msg_conv ON assistant_messages(conversation_id, created_at);
 
+    -- Child Reports & Sign-off (SCRUM-63/64) — gives enrolled children the
+    -- same draft -> sign-off -> send workflow the onboarding assessment flow
+    -- already has. No UNIQUE constraint on (child_id, period_label): a
+    -- generate call always creates a fresh row rather than upserting, so
+    -- past drafts/reports are never silently overwritten.
+    CREATE TABLE IF NOT EXISTS child_reports (
+      id                SERIAL PRIMARY KEY,
+      child_id          INTEGER NOT NULL REFERENCES children(id) ON DELETE CASCADE,
+      period_label      TEXT NOT NULL,
+      ai_draft          TEXT,
+      signed_off_at     TEXT,
+      signed_off_by     TEXT,
+      sent_to_parent_at TEXT,
+      created_at        TEXT NOT NULL,
+      updated_at        TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_child_reports_child ON child_reports(child_id);
+
     -- Auth (SCRUM-16 / SCRUM-17): real accounts and sessions, replacing the
     -- passcode-in-the-frontend-bundle login. Staff (teacher/leader) sign in
     -- with email+password; parent/student sign in with a short passcode.
