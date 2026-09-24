@@ -12,6 +12,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.128.0",
     "cors": "^2.8.6",
     "express": "^4.22.1",
     "multer": "^2.4.0",
