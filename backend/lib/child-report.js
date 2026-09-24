@@ -26,7 +26,7 @@ export async function generateReportDraft({ childName, periodLabel, observations
 
   const response = await client.messages.create({
     model: MODEL,
-    max_tokens: 1024,
+    max_tokens: 4096, // a full structured report (headers, sections, reviewer checklist) needs more room than a chat reply — 1024 truncated mid-sentence in live testing
     system: SYSTEM_PROMPT,
     messages: [{ role: 'user', content: `Write a progress report for ${childName} covering ${periodLabel}.\n\n${context}` }],
   });
