@@ -28,6 +28,7 @@ import { parseChildRow, toJsonArrayColumn, parseJsonArray, canSeeChild } from '.
 import { canSeeFlowStep } from './lib/flow.js';
 import { canSeeThread } from './lib/messaging.js';
 import { askAssistant } from './lib/assistant.js';
+import { generateReportDraft } from './lib/child-report.js';
 import { composeNextStepSuggestion } from './lib/next-steps.js';
 import { computeMastery, computeAttendance, computeStreak, computeTrend } from './lib/progress.js';
 
@@ -2192,6 +2193,79 @@ app.post('/api/assistant/ask', requireAuth, requireRole('teacher', 'parent'), ah
   );
 
   res.status(201).json({ conversation_id: conversation.id, messages: [userMessage, assistantMessage] });
+}));
+
+// ── /api/children/:id/reports ───────────────────────────────────────────────
+// Child Reports & Sign-off (SCRUM-63/65) — gives enrolled children the same
+// draft -> sign-off -> send workflow onboarding assessments already have.
+// This epic has no dedicated "generate a draft" ticket (unlike the
+// assessment-report and next-steps epics), so — since generating a draft is
+// a deliberate, non-idempotent create action ("at any time", always a fresh
+// row, no upsert) rather than a safe-to-repeat read like Progress Tracking's
+// snapshots or Messaging's threads — it's implemented as a real POST here,
+// bundled into this story rather than left unbuilt.
+const getChildReport = async (childId, reportId) => {
+  const { rows: [row] } = await pool.query('SELECT * FROM child_reports WHERE id = $1 AND child_id = $2', [reportId, childId]);
+  return row ?? null;
+};
+
+app.post('/api/children/:id/reports', requireAuth, requireRole('teacher', 'leader'), ah(async (req, res) => {
+  const id = idParam(req, res); if (!id) return;
+  const child = await getChild(id);
+  if (!child || !canSeeChild(req.user.role, parsePositiveIntId(req.user.teacher_id), child.teacher_id)) {
+    return res.status(404).json({ error: 'not found' });
+  }
+
+  const periodLabel = trim(req.body?.period_label) || new Date().toLocaleString('en-GB', { month: 'long', year: 'numeric' });
+
+  const { rows: recentObs } = await pool.query(
+    'SELECT * FROM observations WHERE child_id = $1 ORDER BY captured_at DESC LIMIT 10',
+    [String(id)],
+  );
+  const { rows: [latestProgress] } = await pool.query(
+    'SELECT mastery, attendance, streak, trend FROM progress_snapshots WHERE child_id = $1 ORDER BY date DESC LIMIT 1',
+    [id],
+  );
+
+  let draft;
+  try {
+    draft = await generateReportDraft({
+      childName: child.name,
+      periodLabel,
+      observations: recentObs.map(parseObservationRow),
+      progress: latestProgress || null,
+    });
+  } catch (err) {
+    console.error(`POST /api/children/${id}/reports failed:`, err);
+    return res.status(502).json({ error: `Could not generate a report draft: ${err.message}` });
+  }
+
+  const ts = nowIso();
+  const { rows: [row] } = await pool.query(
+    `INSERT INTO child_reports (child_id, period_label, ai_draft, created_at, updated_at)
+     VALUES ($1, $2, $3, $4, $4) RETURNING *`,
+    [id, periodLabel, draft, ts],
+  );
+  res.status(201).json(row);
+}));
+
+// A teacher/leader sees every report, including drafts; a parent only ever
+// sees signed-off ones — a draft is never returned to a parent, full stop.
+app.get('/api/children/:id/reports', requireAuth, requireRole('teacher', 'leader', 'parent'), ah(async (req, res) => {
+  const id = idParam(req, res); if (!id) return;
+  const child = await getChild(id);
+  if (!child) return res.status(404).json({ error: 'not found' });
+
+  if (req.user.role === 'parent') {
+    if (parsePositiveIntId(req.user.child_id) !== id) return res.status(404).json({ error: 'not found' });
+  } else if (req.user.role === 'teacher') {
+    if (!canSeeChild('teacher', parsePositiveIntId(req.user.teacher_id), child.teacher_id)) return res.status(404).json({ error: 'not found' });
+  }
+
+  const { rows } = req.user.role === 'parent'
+    ? await pool.query('SELECT * FROM child_reports WHERE child_id = $1 AND signed_off_at IS NOT NULL ORDER BY created_at DESC', [id])
+    : await pool.query('SELECT * FROM child_reports WHERE child_id = $1 ORDER BY created_at DESC', [id]);
+  res.json(rows);
 }));
 
 app.get('/api/health', ah(async (_req, res) => {
