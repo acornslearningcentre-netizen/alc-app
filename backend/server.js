@@ -2458,6 +2458,28 @@ app.get('/api/students/:childId/growing', requireAuth, requireRole('teacher', 'l
   res.json(rows);
 }));
 
+// SCRUM-73 — ticks a growing-checklist item. Idempotent: UNIQUE(child_id,
+// item) plus ON CONFLICT DO UPDATE (a no-op update of done_at to itself,
+// just so Postgres RETURNING works on the conflict path too) means ticking
+// the same item twice never creates a second row and never bumps the
+// original done_at — it's still just "done", per this ticket's own AC.
+app.post('/api/students/:childId/growing', requireAuth, requireRole('student'), ah(async (req, res) => {
+  const childId = parsePositiveIntId(req.params.childId);
+  if (!childId) return res.status(400).json({ error: 'invalid child id' });
+  if (parsePositiveIntId(req.user.child_id) !== childId) return res.status(404).json({ error: 'not found' });
+
+  const item = trim(req.body?.item);
+  if (!item) return res.status(400).json({ error: 'item is required' });
+
+  const { rows: [row] } = await pool.query(
+    `INSERT INTO student_growing (child_id, item, done_at) VALUES ($1, $2, $3)
+     ON CONFLICT (child_id, item) DO UPDATE SET done_at = student_growing.done_at
+     RETURNING *`,
+    [childId, item, nowIso()],
+  );
+  res.status(201).json(row);
+}));
+
 app.get('/api/health', ah(async (_req, res) => {
   await pool.query('SELECT 1');
   res.json({ ok: true });
