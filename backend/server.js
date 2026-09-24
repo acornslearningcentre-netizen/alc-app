@@ -2296,6 +2296,53 @@ app.post('/api/children/:id/reports/:reportId/sign-off', requireAuth, requireRol
   res.json(row);
 }));
 
+// SCRUM-67 — sends a signed-off report to the parent by real email, reusing
+// sendReportEmail (lib/report-email.js) from the onboarding-assessment send
+// flow (SCRUM-88) rather than building a second email path. The parent's
+// real address lives on prospects.parent_email, reached via
+// children.prospect_id — a manually-created child with no onboarding
+// history has no email on file, and this fails clearly rather than
+// guessing one. Never marks anything sent if the email genuinely fails.
+app.post('/api/children/:id/reports/:reportId/send', requireAuth, requireRole('teacher', 'leader'), ah(async (req, res) => {
+  const childId = idParam(req, res); if (!childId) return;
+  const reportId = parsePositiveIntId(req.params.reportId);
+  if (!reportId) return res.status(400).json({ error: 'invalid report id' });
+
+  const child = await getChild(childId);
+  if (!child || !canSeeChild(req.user.role, parsePositiveIntId(req.user.teacher_id), child.teacher_id)) {
+    return res.status(404).json({ error: 'not found' });
+  }
+  const report = await getChildReport(childId, reportId);
+  if (!report) return res.status(404).json({ error: 'not found' });
+
+  if (!report.signed_off_at) return res.status(409).json({ error: 'sign off the report before sending' });
+  if (report.sent_to_parent_at) return res.status(409).json({ error: 'already sent' });
+
+  const prospect = child.prospect_id ? await getProspect(child.prospect_id) : null;
+  if (!prospect || !prospect.parent_email) {
+    return res.status(400).json({ error: 'no parent email on file for this family' });
+  }
+
+  try {
+    await sendReportEmail({
+      to: prospect.parent_email,
+      parentName: prospect.parent_name,
+      childFirstName: child.name,
+      reportText: report.ai_draft,
+    });
+  } catch (err) {
+    console.error(`POST /api/children/${childId}/reports/${reportId}/send — email failed:`, err);
+    return res.status(502).json({ error: `Could not send the email: ${err.message}` });
+  }
+
+  const ts = nowIso();
+  const { rows: [row] } = await pool.query(
+    'UPDATE child_reports SET sent_to_parent_at = $1, updated_at = $1 WHERE id = $2 RETURNING *',
+    [ts, reportId],
+  );
+  res.json(row);
+}));
+
 app.get('/api/health', ah(async (_req, res) => {
   await pool.query('SELECT 1');
   res.json({ ok: true });
