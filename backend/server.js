@@ -2424,6 +2424,25 @@ app.get('/api/students/:childId/garden', requireAuth, requireRole('teacher', 'le
   res.json(rows);
 }));
 
+// SCRUM-71 — records a watering. Student-only (this is self-service — a
+// teacher/parent doesn't water a child's garden for them), and always
+// inserts a fresh row (no upsert) so re-watering the same plant keeps the
+// earlier record rather than losing it.
+app.post('/api/students/:childId/garden', requireAuth, requireRole('student'), ah(async (req, res) => {
+  const childId = parsePositiveIntId(req.params.childId);
+  if (!childId) return res.status(400).json({ error: 'invalid child id' });
+  if (parsePositiveIntId(req.user.child_id) !== childId) return res.status(404).json({ error: 'not found' });
+
+  const plantId = trim(req.body?.plant_id);
+  if (!plantId) return res.status(400).json({ error: 'plant_id is required' });
+
+  const { rows: [row] } = await pool.query(
+    'INSERT INTO student_garden (child_id, plant_id, watered_at) VALUES ($1, $2, $3) RETURNING *',
+    [childId, plantId, nowIso()],
+  );
+  res.status(201).json(row);
+}));
+
 app.get('/api/health', ah(async (_req, res) => {
   await pool.query('SELECT 1');
   res.json({ ok: true });
