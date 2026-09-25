@@ -1994,6 +1994,60 @@ app.get('/api/progress/class', requireAuth, requireRole('teacher', 'leader'), ah
   });
 }));
 
+// ── /api/leader/* ────────────────────────────────────────────────────────────
+// School Leader Analytics Dashboards (SCRUM-76/78) — every number here comes
+// from the same real progress_snapshots computation as Progress Tracking
+// (computeAndSaveSnapshot), just aggregated whole-school instead of per
+// class. Leader-only: this is cross-class data a teacher shouldn't see.
+async function computeAllChildSnapshots(forDate) {
+  const { rows: children } = await pool.query(
+    `SELECT c.id, c.name, c.teacher_id, c.flags, t.name AS teacher_name
+     FROM children c LEFT JOIN teachers t ON t.id = c.teacher_id
+     ORDER BY c.name`,
+  );
+
+  const results = [];
+  for (const child of children) {
+    const snapshot = await computeAndSaveSnapshot(child.id, forDate);
+    const { rows: [previous] } = await pool.query(
+      'SELECT mastery FROM progress_snapshots WHERE child_id = $1 AND date < $2 ORDER BY date DESC LIMIT 1',
+      [child.id, forDate],
+    );
+    results.push({
+      id: child.id, name: child.name, teacherId: child.teacher_id, teacherName: child.teacher_name,
+      flags: parseJsonArray(child.flags),
+      mastery: snapshot.mastery, attendance: snapshot.attendance, streak: snapshot.streak, trend: snapshot.trend,
+      previousMastery: previous?.mastery ?? null,
+    });
+  }
+  return results;
+}
+
+// SCRUM-78 — today's school-wide snapshot, replacing the fixed sample
+// numbers on the leader Today screen.
+app.get('/api/leader/overview', requireAuth, requireRole('leader'), ah(async (_req, res) => {
+  const today = nowIso().slice(0, 10);
+  const children = await computeAllChildSnapshots(today);
+
+  const avgMastery = average(children.map((c) => c.mastery));
+  const previousAvgMastery = average(children.map((c) => c.previousMastery));
+
+  const { rows: [{ count: observationsToday }] } = await pool.query(
+    'SELECT COUNT(*)::int AS count FROM observations WHERE child_id IS NOT NULL AND captured_at LIKE $1',
+    [`${today}%`],
+  );
+
+  res.json({
+    date: today,
+    children_count: children.length,
+    avg_mastery: avgMastery,
+    avg_attendance: average(children.map((c) => c.attendance)),
+    trend: computeTrend(avgMastery, previousAvgMastery),
+    observations_today: observationsToday,
+    flagged_children: children.filter((c) => c.flags.length > 0).length,
+  });
+}));
+
 // ── /api/threads ─────────────────────────────────────────────────────────────
 // Teacher ⇄ Parent Messaging (SCRUM-54/56) — real, persistent conversations.
 // There's no POST /api/threads in this sprint's scope, so a thread is
