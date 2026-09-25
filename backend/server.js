@@ -2048,6 +2048,34 @@ app.get('/api/leader/overview', requireAuth, requireRole('leader'), ah(async (_r
   });
 }));
 
+// SCRUM-79 — progress broken down by cohort. This schema's only real cohort
+// grouping is a teacher's class (there's no year-group field on children),
+// so a "cohort" here is genuinely a teacher's roster, not an invented one.
+app.get('/api/leader/cohorts', requireAuth, requireRole('leader'), ah(async (_req, res) => {
+  const today = nowIso().slice(0, 10);
+  const children = await computeAllChildSnapshots(today);
+  const { rows: teachers } = await pool.query('SELECT id, name FROM teachers ORDER BY name');
+
+  const cohorts = teachers.map((t) => {
+    const cohortChildren = children.filter((c) => c.teacherId === t.id);
+    const avgMastery = average(cohortChildren.map((c) => c.mastery));
+    const previousAvgMastery = average(cohortChildren.map((c) => c.previousMastery));
+    return {
+      teacher_id: t.id,
+      teacher_name: t.name,
+      child_count: cohortChildren.length,
+      avg_mastery: avgMastery,
+      avg_attendance: average(cohortChildren.map((c) => c.attendance)),
+      trend: computeTrend(avgMastery, previousAvgMastery),
+      children: cohortChildren.map((c) => ({
+        child_id: c.id, child_name: c.name, mastery: c.mastery, attendance: c.attendance, trend: c.trend, flags: c.flags,
+      })),
+    };
+  });
+
+  res.json({ date: today, cohorts });
+}));
+
 // ── /api/threads ─────────────────────────────────────────────────────────────
 // Teacher ⇄ Parent Messaging (SCRUM-54/56) — real, persistent conversations.
 // There's no POST /api/threads in this sprint's scope, so a thread is
