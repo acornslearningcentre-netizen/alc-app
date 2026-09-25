@@ -31,6 +31,7 @@ import { askAssistant } from './lib/assistant.js';
 import { generateReportDraft } from './lib/child-report.js';
 import { composeNextStepSuggestion } from './lib/next-steps.js';
 import { computeMastery, computeAttendance, computeStreak, computeTrend } from './lib/progress.js';
+import { bucketMasteryDistribution, detectPatterns } from './lib/leader-analytics.js';
 
 const { Pool } = pg;
 const PORT = Number(process.env.PORT) || 3000;
@@ -2074,6 +2075,38 @@ app.get('/api/leader/cohorts', requireAuth, requireRole('leader'), ah(async (_re
   });
 
   res.json({ date: today, cohorts });
+}));
+
+// SCRUM-80 — school-wide outcome trends over time, computed from real
+// history in progress_snapshots (which accumulates a real row per child per
+// day as the other progress endpoints get called) — not hand-set figures.
+// This schema has no per-curriculum-strand scoring, so a strand-by-strand
+// breakdown isn't included — that would be invented, not real.
+app.get('/api/leader/outcomes', requireAuth, requireRole('leader'), ah(async (req, res) => {
+  const today = nowIso().slice(0, 10);
+  const children = await computeAllChildSnapshots(today);
+
+  const requestedDays = Number(req.query.days);
+  const days = Number.isInteger(requestedDays) && requestedDays > 0 ? requestedDays : 30;
+  const cutoff = new Date(`${today}T00:00:00Z`);
+  cutoff.setUTCDate(cutoff.getUTCDate() - days);
+  const cutoffDate = cutoff.toISOString().slice(0, 10);
+
+  const { rows: dailyRows } = await pool.query(
+    `SELECT date, AVG(mastery) AS avg_mastery, AVG(attendance) AS avg_attendance, COUNT(*)::int AS child_count
+     FROM progress_snapshots WHERE date >= $1 GROUP BY date ORDER BY date ASC`,
+    [cutoffDate],
+  );
+
+  res.json({
+    trend: dailyRows.map((r) => ({
+      date: r.date,
+      avg_mastery: r.avg_mastery === null ? null : Math.round(Number(r.avg_mastery) * 10) / 10,
+      avg_attendance: r.avg_attendance === null ? null : Math.round(Number(r.avg_attendance) * 10) / 10,
+      child_count: r.child_count,
+    })),
+    distribution: bucketMasteryDistribution(children),
+  });
 }));
 
 // ── /api/threads ─────────────────────────────────────────────────────────────
