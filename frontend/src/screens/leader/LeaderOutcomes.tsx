@@ -1,80 +1,114 @@
-import React from 'react';
-import { Icon, Sparkline } from '../../components/ui';
-import { ALC_DATA } from '../../data/seed';
+import React, { useEffect, useState } from 'react';
+import { Sparkline } from '../../components/ui';
+import { useAppStore } from '../../store/app-store';
+import { fetchLeaderOutcomes } from '../../lib/leader-api';
+import type { LeaderOutcomes as LeaderOutcomesData } from '../../lib/leader-api';
+
+const pct = (n: number | null) => (n === null ? '—' : `${n}%`);
+const shortDate = (iso: string) => new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
 
 export const LeaderOutcomes: React.FC = () => {
-  const { children } = ALC_DATA;
+  const token = useAppStore(s => s.token);
+  const [data, setData] = useState<LeaderOutcomesData | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  const strandData = [
-    { label: 'Language', avg: 68, trend: [58, 60, 62, 65, 67, 68], color: 'var(--sage)' },
-    { label: 'Mathematics', avg: 72, trend: [62, 64, 67, 69, 71, 72], color: 'var(--ochre)' },
-    { label: 'Sensorial', avg: 75, trend: [65, 68, 70, 72, 74, 75], color: 'var(--plum)' },
-    { label: 'Practical Life', avg: 81, trend: [70, 73, 75, 78, 80, 81], color: 'var(--sky)' },
-    { label: 'Cultural', avg: 64, trend: [56, 58, 60, 61, 63, 64], color: 'var(--sage)' },
-  ];
+  useEffect(() => {
+    if (!token) { setError('You need to be signed in as a school leader to see this.'); setLoading(false); return; }
+    let cancelled = false;
+    fetchLeaderOutcomes(token)
+      .then(d => { if (!cancelled) { setData(d); setError(null); } })
+      .catch((err: Error) => { if (!cancelled) setError(err.message); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [token]);
 
-  const termData = [
-    { term: 'Autumn', mastery: 61, attendance: 91, observations: 98 },
-    { term: 'Spring (to date)', mastery: 69, attendance: 93, observations: 127 },
-  ];
+  if (loading) return <div className="page-fade muted" style={{ padding: 40 }}>Loading outcomes…</div>;
+  if (error || !data) return <div className="page-fade muted" style={{ padding: 40 }}>{error ?? 'Could not load outcomes.'}</div>;
+
+  const withMastery = data.trend.filter(t => t.avg_mastery !== null);
+  const masteryValues = withMastery.map(t => t.avg_mastery as number);
+  const earliest = data.trend[0];
+  const latest = data.trend[data.trend.length - 1];
+  const { exceeding, meeting, needsSupport } = data.distribution;
+  const distTotal = exceeding + meeting + needsSupport;
 
   return (
     <div className="page-fade">
       <div className="topbar">
         <div>
           <h1>Outcomes</h1>
-          <div className="sub">Whole-school results · curriculum strands · term comparison</div>
-        </div>
-        <div className="topbar-actions">
-          <button className="btn"><Icon name="chart" size={13}/> Export report</button>
+          <div className="sub">Whole-school results · real history, last 30 days</div>
         </div>
       </div>
 
-      <div className="grid grid-2" style={{ gap: 16, marginBottom: 16 }}>
-        {termData.map(t => (
-          <div key={t.term} className="card" style={{ padding: 20 }}>
-            <div className="tiny" style={{ marginBottom: 10 }}>{t.term}</div>
-            <div className="grid grid-3" style={{ gap: 10 }}>
-              <div style={{ textAlign: 'center' }}>
-                <div style={{ fontWeight: 800, fontSize: 22 }}>{t.mastery}%</div>
-                <div className="muted" style={{ fontSize: 12 }}>Avg. mastery</div>
-              </div>
-              <div style={{ textAlign: 'center' }}>
-                <div style={{ fontWeight: 800, fontSize: 22 }}>{t.attendance}%</div>
-                <div className="muted" style={{ fontSize: 12 }}>Attendance</div>
-              </div>
-              <div style={{ textAlign: 'center' }}>
-                <div style={{ fontWeight: 800, fontSize: 22 }}>{t.observations}</div>
-                <div className="muted" style={{ fontSize: 12 }}>Observations</div>
+      {earliest && latest && earliest !== latest ? (
+        <div className="grid grid-2" style={{ gap: 16, marginBottom: 16 }}>
+          {[{ label: `Earliest on record · ${shortDate(earliest.date)}`, point: earliest }, { label: `Most recent · ${shortDate(latest.date)}`, point: latest }].map(({ label, point }) => (
+            <div key={label} className="card" style={{ padding: 20 }}>
+              <div className="tiny" style={{ marginBottom: 10 }}>{label}</div>
+              <div className="grid grid-3" style={{ gap: 10 }}>
+                <div style={{ textAlign: 'center' }}>
+                  <div style={{ fontWeight: 800, fontSize: 22 }}>{pct(point.avg_mastery)}</div>
+                  <div className="muted" style={{ fontSize: 12 }}>Avg. mastery</div>
+                </div>
+                <div style={{ textAlign: 'center' }}>
+                  <div style={{ fontWeight: 800, fontSize: 22 }}>{pct(point.avg_attendance)}</div>
+                  <div className="muted" style={{ fontSize: 12 }}>Avg. attendance</div>
+                </div>
+                <div style={{ textAlign: 'center' }}>
+                  <div style={{ fontWeight: 800, fontSize: 22 }}>{point.child_count}</div>
+                  <div className="muted" style={{ fontSize: 12 }}>Children tracked</div>
+                </div>
               </div>
             </div>
+          ))}
+        </div>
+      ) : latest ? (
+        <div className="card" style={{ padding: 20, marginBottom: 16 }}>
+          <div className="tiny" style={{ marginBottom: 10 }}>{shortDate(latest.date)}</div>
+          <div className="grid grid-3" style={{ gap: 10 }}>
+            <div style={{ textAlign: 'center' }}>
+              <div style={{ fontWeight: 800, fontSize: 22 }}>{pct(latest.avg_mastery)}</div>
+              <div className="muted" style={{ fontSize: 12 }}>Avg. mastery</div>
+            </div>
+            <div style={{ textAlign: 'center' }}>
+              <div style={{ fontWeight: 800, fontSize: 22 }}>{pct(latest.avg_attendance)}</div>
+              <div className="muted" style={{ fontSize: 12 }}>Avg. attendance</div>
+            </div>
+            <div style={{ textAlign: 'center' }}>
+              <div style={{ fontWeight: 800, fontSize: 22 }}>{latest.child_count}</div>
+              <div className="muted" style={{ fontSize: 12 }}>Children tracked</div>
+            </div>
           </div>
-        ))}
-      </div>
+        </div>
+      ) : (
+        <div className="card muted" style={{ padding: 20, marginBottom: 16, textAlign: 'center' }}>No history yet — check back after a few days of activity.</div>
+      )}
 
       <div className="card" style={{ padding: 24, marginBottom: 16 }}>
-        <h3 style={{ marginBottom: 16 }}>Mastery by curriculum strand</h3>
-        {strandData.map(s => (
-          <div key={s.label} className="row" style={{ gap: 14, padding: '12px 0', borderBottom: '1px dashed var(--line)' }}>
-            <div style={{ width: 110, fontWeight: 700, fontSize: 13.5 }}>{s.label}</div>
-            <div style={{ flex: 1 }}>
-              <div className="bar" style={{ height: 8 }}><span style={{ width: s.avg + '%' }}/></div>
+        <h3 style={{ marginBottom: 16 }}>Mastery over time</h3>
+        {masteryValues.length >= 2 ? (
+          <>
+            <Sparkline values={masteryValues} color="var(--sage)" height={90}/>
+            <div className="row" style={{ gap: 4, marginTop: 8 }}>
+              {withMastery.map(t => (
+                <div key={t.date} style={{ flex: 1, textAlign: 'center', fontSize: 11, color: 'var(--ink-4)' }}>{shortDate(t.date)}</div>
+              ))}
             </div>
-            <div className="mono" style={{ width: 44, textAlign: 'right', color: 'var(--ink-3)', fontSize: 13 }}>{s.avg}%</div>
-            <div style={{ width: 120 }}>
-              <Sparkline values={s.trend} color={s.color}/>
-            </div>
-          </div>
-        ))}
+          </>
+        ) : (
+          <div className="muted" style={{ fontSize: 12.5 }}>Not enough history yet to chart a trend.</div>
+        )}
       </div>
 
       <div className="card" style={{ padding: 24 }}>
-        <h3 style={{ marginBottom: 14 }}>Cohort distribution</h3>
+        <h3 style={{ marginBottom: 14 }}>Mastery distribution</h3>
         <div className="grid grid-3" style={{ gap: 12 }}>
           {[
-            { label: 'Exceeding expectations', count: children.filter(c => c.mastery >= 75).length, tone: 'sage' },
-            { label: 'Meeting expectations', count: children.filter(c => c.mastery >= 60 && c.mastery < 75).length, tone: 'ochre' },
-            { label: 'Needs support', count: children.filter(c => c.mastery < 60).length, tone: 'plum' },
+            { label: 'Exceeding expectations', count: exceeding, tone: 'sage' },
+            { label: 'Meeting expectations', count: meeting, tone: 'ochre' },
+            { label: 'Needs support', count: needsSupport, tone: 'plum' },
           ].map(group => (
             <div key={group.label} className={`card tone-${group.tone}`} style={{ padding: 16, textAlign: 'center' }}>
               <div style={{ fontWeight: 800, fontSize: 28 }}>{group.count}</div>
@@ -82,6 +116,7 @@ export const LeaderOutcomes: React.FC = () => {
             </div>
           ))}
         </div>
+        {distTotal === 0 && <div className="muted" style={{ marginTop: 12, fontSize: 12.5, textAlign: 'center' }}>No children have a mastery score yet.</div>}
       </div>
     </div>
   );
