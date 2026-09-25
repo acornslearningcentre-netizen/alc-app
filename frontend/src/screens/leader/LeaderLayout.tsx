@@ -18,7 +18,7 @@ export const LeaderLayout: React.FC = () => {
     { key: 'dashboard', icon: 'home', label: 'Today' },
     { key: 'cohorts', icon: 'users', label: 'Cohorts' },
     { key: 'teachers', icon: 'star', label: 'Teachers' },
-    { key: 'patterns', icon: 'flag', label: 'Patterns', dot: '4' },
+    { key: 'patterns', icon: 'flag', label: 'Patterns' },
     { key: 'outcomes', icon: 'chart', label: 'Outcomes' },
   ];
 
