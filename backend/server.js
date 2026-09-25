@@ -2109,6 +2109,25 @@ app.get('/api/leader/outcomes', requireAuth, requireRole('leader'), ah(async (re
   });
 }));
 
+// SCRUM-81 — flags patterns needing attention. Every pattern here comes from
+// real fields already computed elsewhere (a genuine mastery trend, a flag a
+// teacher actually set, a cohort average genuinely below the school
+// average) — see lib/leader-analytics.js's detectPatterns for the rule set
+// and why it deliberately stops short of invented tag/mood correlations.
+app.get('/api/leader/patterns', requireAuth, requireRole('leader'), ah(async (_req, res) => {
+  const today = nowIso().slice(0, 10);
+  const children = await computeAllChildSnapshots(today);
+  const { rows: teachers } = await pool.query('SELECT id, name FROM teachers ORDER BY name');
+
+  const schoolAvgMastery = average(children.map((c) => c.mastery));
+  const cohorts = teachers.map((t) => ({
+    teacherId: t.id, teacherName: t.name,
+    avgMastery: average(children.filter((c) => c.teacherId === t.id).map((c) => c.mastery)),
+  }));
+
+  res.json({ date: today, patterns: detectPatterns({ children, cohorts, schoolAvgMastery }) });
+}));
+
 // ── /api/threads ─────────────────────────────────────────────────────────────
 // Teacher ⇄ Parent Messaging (SCRUM-54/56) — real, persistent conversations.
 // There's no POST /api/threads in this sprint's scope, so a thread is
