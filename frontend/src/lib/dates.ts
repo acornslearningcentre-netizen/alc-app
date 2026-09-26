@@ -1,6 +1,14 @@
 // Pure date helpers shared across screens that talk to week-scoped backend
 // endpoints (Lesson Planning's week_of). No fetch, no React.
 
+/** ISO (YYYY-MM-DD) for a date, in local time — avoids toISOString()'s UTC shift near midnight. */
+export function isoDate(date: Date = new Date()): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
 /** ISO (YYYY-MM-DD) date of the Monday on or before the given date, in local time. */
 export function mondayOf(date: Date = new Date()): string {
   const d = new Date(date.getFullYear(), date.getMonth(), date.getDate());

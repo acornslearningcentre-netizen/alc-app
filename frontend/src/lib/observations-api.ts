@@ -30,6 +30,15 @@ const authHeaders = (token: string) => ({ Authorization: `Bearer ${token}` });
 export const fetchChildObservations = (token: string, childId: number | string): Promise<RealObservation[]> =>
   fetch(apiUrl(`/api/observations?child_id=${childId}`), { headers: authHeaders(token) }).then(asJson<RealObservation[]>);
 
+/**
+ * GET /api/observations — the most recent observations system-wide (up to
+ * 100), unscoped by class. This endpoint has no teacher/class filter, so a
+ * caller building a "my class" feed must cross-reference the result against
+ * a real roster (e.g. fetchChildren) and filter by child_id itself.
+ */
+export const fetchRecentObservations = (token: string): Promise<RealObservation[]> =>
+  fetch(apiUrl('/api/observations'), { headers: authHeaders(token) }).then(asJson<RealObservation[]>);
+
 export interface NewObservation {
   child_id: number | string;
   kind: ObservationKind;
