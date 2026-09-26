@@ -27,6 +27,10 @@ const authHeaders = (token: string) => ({ Authorization: `Bearer ${token}` });
 export const fetchChildNextSteps = (token: string, childId: number | string, status?: NextStepStatus): Promise<RealNextStep[]> =>
   fetch(apiUrl(`/api/next-steps?child_id=${childId}${status ? `&status=${status}` : ''}`), { headers: authHeaders(token) }).then(asJson<RealNextStep[]>);
 
+/** GET /api/next-steps?status=X — every suggestion across a teacher's own class (or, for a leader, everyone's). */
+export const fetchNextSteps = (token: string, status?: NextStepStatus): Promise<RealNextStep[]> =>
+  fetch(apiUrl(`/api/next-steps${status ? `?status=${status}` : ''}`), { headers: authHeaders(token) }).then(asJson<RealNextStep[]>);
+
 /** POST /api/next-steps/:id/accept */
 export const acceptNextStep = (token: string, id: number): Promise<RealNextStep> =>
   fetch(apiUrl(`/api/next-steps/${id}/accept`), { method: 'POST', headers: authHeaders(token) }).then(asJson<RealNextStep>);
