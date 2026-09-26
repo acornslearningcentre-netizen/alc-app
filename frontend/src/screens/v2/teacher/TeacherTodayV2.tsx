@@ -1,6 +1,16 @@
-import React from 'react';
-import { Icon, Sparkline } from '../../../components/ui';
-import { ALC_DATA } from '../../../data/seed';
+import React, { useEffect, useState } from 'react';
+import { Icon } from '../../../components/ui';
+import { useAppStore } from '../../../store/app-store';
+import { fetchChildren } from '../../../lib/children-api';
+import type { RealChild } from '../../../lib/children-api';
+import { fetchFlowSteps, updateFlowStep } from '../../../lib/flow-api';
+import type { RealFlowStep } from '../../../lib/flow-api';
+import { fetchNextSteps } from '../../../lib/next-steps-api';
+import type { RealNextStep } from '../../../lib/next-steps-api';
+import { fetchRecentObservations } from '../../../lib/observations-api';
+import type { RealObservation } from '../../../lib/observations-api';
+import { initialsFromName } from '../../../lib/child-fields';
+import { isoDate } from '../../../lib/dates';
 
 interface Props {
   onChild: (id: string) => void;
@@ -8,7 +18,44 @@ interface Props {
 }
 
 export const TeacherTodayV2: React.FC<Props> = ({ onChild, onObserve }) => {
-  const { children, observations } = ALC_DATA;
+  const token = useAppStore(s => s.token);
+  const userName = useAppStore(s => s.userName);
+  const [children, setChildren] = useState<RealChild[] | null>(null);
+  const [flow, setFlow] = useState<RealFlowStep[]>([]);
+  const [nextSteps, setNextSteps] = useState<RealNextStep[]>([]);
+  const [observations, setObservations] = useState<RealObservation[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  const today = isoDate();
+  const dateLabel = new Date().toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' });
+
+  useEffect(() => {
+    if (!token) { setError('You need to be signed in to see your day.'); setLoading(false); return; }
+    let cancelled = false;
+    Promise.all([fetchChildren(token), fetchFlowSteps(token, today), fetchNextSteps(token, 'pending'), fetchRecentObservations(token)])
+      .then(([c, f, steps, obs]) => {
+        if (cancelled) return;
+        setChildren(c); setFlow(f); setNextSteps(steps); setObservations(obs); setError(null);
+      })
+      .catch((err: Error) => { if (!cancelled) setError(err.message); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [token, today]);
+
+  const markStepState = async (id: number, state: 'done' | 'now') => {
+    if (!token) return;
+    const updated = await updateFlowStep(token, id, { state });
+    setFlow(steps => steps.map(s => (s.id === id ? updated : s)));
+  };
+
+  if (loading) return <div className="v2-content muted">Loading your day…</div>;
+  if (error || !children) return <div className="v2-content muted">{error ?? 'Could not load your day.'}</div>;
+
+  const childById = new Map(children.map(c => [c.id, c]));
+  const classObservations = observations.filter(o => o.child_id !== null && childById.has(Number(o.child_id)));
+  const observationsToday = classObservations.filter(o => o.captured_at.slice(0, 10) === today).length;
+  const flaggedChildren = children.filter(c => c.flags.length > 0);
 
   return (
     <div className="v2-content">
@@ -18,17 +65,15 @@ export const TeacherTodayV2: React.FC<Props> = ({ onChild, onObserve }) => {
             <span className="num">01</span>
             <span>— Today</span>
             <span>·</span>
-            <span>Mon 20 Apr · clear</span>
+            <span>{dateLabel}</span>
             <span>·</span>
-            <span>12 in / 2 to check on</span>
+            <span>{children.length} in / {flaggedChildren.length} to check on</span>
           </div>
           <h1 className="v2-greeting-h1">
-            Good morning,<br/><em>Ana.</em>
+            Good morning{userName ? ',' : '.'}<br/>{userName && <em>{userName}.</em>}
           </h1>
         </div>
         <div className="v2-actions">
-          <button className="v2-btn ghost" aria-label="Search"><Icon name="search" size={14}/></button>
-          <button className="v2-btn ghost" aria-label="Notifications"><Icon name="bell" size={14}/></button>
           <button className="v2-btn primary" onClick={onObserve}><Icon name="mic" size={14}/> Capture observation</button>
         </div>
       </header>
@@ -39,12 +84,11 @@ export const TeacherTodayV2: React.FC<Props> = ({ onChild, onObserve }) => {
             <span className="num">02</span>
             <span className="em">— Observations today</span>
             <span className="spacer"/>
-            <span>Last 7 days</span>
+            <span>Across your class</span>
           </div>
-          <div className="v2-stat-num">14</div>
+          <div className="v2-stat-num">{String(observationsToday).padStart(2, '0')}</div>
           <div className="v2-stat-meta">
-            <Sparkline values={[3,5,4,7,6,9,14]} color="var(--v2-tangerine)" fill/>
-            <span className="v2-mono" style={{ fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--v2-pencil)' }}>+6 vs. last Mon</span>
+            <span className="v2-mono" style={{ fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--v2-pencil)' }}>{classObservations.length} total on record</span>
           </div>
         </div>
 
@@ -55,11 +99,7 @@ export const TeacherTodayV2: React.FC<Props> = ({ onChild, onObserve }) => {
             <span className="spacer"/>
             <span>Pending</span>
           </div>
-          <div className="v2-stat-num" style={{ color: 'var(--v2-ultramarine)' }}>07</div>
-          <div className="v2-stat-meta">
-            <span className="v2-chip ultramarine-soft">3 lesson pivots</span>
-            <span className="v2-chip ultramarine-soft">4 next steps</span>
-          </div>
+          <div className="v2-stat-num" style={{ color: 'var(--v2-ultramarine)' }}>{String(nextSteps.length).padStart(2, '0')}</div>
         </div>
 
         <div className="v2-stat-block pair">
@@ -69,10 +109,11 @@ export const TeacherTodayV2: React.FC<Props> = ({ onChild, onObserve }) => {
             <span className="spacer"/>
             <span>Flagged</span>
           </div>
-          <div className="v2-stat-num" style={{ color: 'var(--v2-tangerine)' }}>02</div>
+          <div className="v2-stat-num" style={{ color: 'var(--v2-tangerine)' }}>{String(flaggedChildren.length).padStart(2, '0')}</div>
           <div className="v2-stat-meta">
-            <span className="v2-chip tangerine-soft">Leo · attention</span>
-            <span className="v2-chip tangerine-soft">Isla · mood</span>
+            {flaggedChildren.slice(0, 2).map(c => (
+              <span key={c.id} className="v2-chip tangerine-soft">{c.name.split(' ')[0]} · {c.flags[0]}</span>
+            ))}
           </div>
         </div>
       </section>
@@ -83,12 +124,12 @@ export const TeacherTodayV2: React.FC<Props> = ({ onChild, onObserve }) => {
             <span className="num">05</span>
             <span className="em">— Today's flow</span>
             <span className="spacer"/>
-            <span>Suggested from yesterday</span>
+            <span>{flow.length === 0 ? 'Nothing scheduled yet' : 'Tap to update'}</span>
           </div>
-          <Flow/>
+          <Flow steps={flow} onMark={markStepState}/>
         </div>
 
-        <AIBrief onChild={onChild}/>
+        <AIBrief nextSteps={nextSteps} childById={childById} onChild={onChild}/>
       </section>
 
       <section className="v2-obs-card">
@@ -96,89 +137,80 @@ export const TeacherTodayV2: React.FC<Props> = ({ onChild, onObserve }) => {
           <span className="num">06</span>
           <span className="em">— Recent observations</span>
           <span className="spacer"/>
-          <span>Across 12 children · 24h</span>
+          <span>Across your class</span>
         </div>
         <div className="v2-obs-list">
-          {observations.slice(0, 4).map(o => {
-            const ch = children.find(c => c.id === o.childId);
+          {classObservations.slice(0, 4).map(o => {
+            const ch = childById.get(Number(o.child_id));
             if (!ch) return null;
             return (
               <article key={o.id} className="v2-obs">
-                <span className="v2-obs-avatar">{ch.initials}</span>
+                <span className="v2-obs-avatar">{ch.initials || initialsFromName(ch.name)}</span>
                 <div>
                   <div className="v2-obs-head">
                     <span>
                       <span className="v2-obs-name">{ch.name}</span>
-                      <span className="v2-obs-author">{o.author}</span>
+                      <span className="v2-obs-author">{o.kind}</span>
                     </span>
-                    <span className="v2-obs-time">{o.time}</span>
+                    <span className="v2-obs-time">{new Date(o.captured_at).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}</span>
                   </div>
-                  <p className="v2-obs-text">{o.text}</p>
+                  <p className="v2-obs-text">{o.comment || o.transcript || '(no text recorded)'}</p>
                   <div className="v2-tags">
                     {o.tags.map(t => <span key={t} className="v2-chip">{t}</span>)}
-                    {o.role === 'parent' && <span className="v2-chip ultramarine-soft"><Icon name="heart" size={11}/> from parent</span>}
                   </div>
                 </div>
-                <button className="v2-obs-cta" onClick={() => onChild(ch.id)} aria-label={`Open ${ch.name}'s profile`}>
+                <button className="v2-obs-cta" onClick={() => onChild(String(ch.id))} aria-label={`Open ${ch.name}'s profile`}>
                   <Icon name="arrow-right" size={14}/>
                 </button>
               </article>
             );
           })}
+          {classObservations.length === 0 && <div className="muted" style={{ fontSize: 13 }}>No observations logged for your class yet.</div>}
         </div>
       </section>
     </div>
   );
 };
 
-const Flow: React.FC = () => {
-  const steps = [
-    { time: '08:30', label: 'Arrival & free choice', state: 'done' },
-    { time: '09:15', label: 'Language — Moveable alphabet', state: 'done' },
-    { time: '10:00', label: 'Outdoor play', state: 'done' },
-    { time: '10:30', label: 'Group time', state: 'now' },
-    { time: '11:00', label: 'Mathematics — Golden beads', state: 'next', ai: true },
-    { time: '12:00', label: 'Lunch & rest', state: 'next' },
-    { time: '13:30', label: 'Practical life rotation', state: 'next', ai: true },
-  ];
-  return (
-    <div style={{ marginTop: 8 }}>
-      {steps.map((s, i) => (
-        <div key={i} className={`v2-flow-row ${s.state}`}>
-          <span className="v2-flow-time">{s.time}</span>
-          <span className="v2-flow-pip" aria-hidden/>
-          <span className="v2-flow-label">{s.label}</span>
-          <span style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-            {s.ai && <span className="v2-chip ultramarine"><Icon name="sparkle" size={10}/> AI-shaped</span>}
-            {s.state === 'now' && <span className="v2-chip tangerine">Now</span>}
-          </span>
-        </div>
-      ))}
-    </div>
-  );
-};
+const Flow: React.FC<{ steps: RealFlowStep[]; onMark: (id: number, state: 'done' | 'now') => void }> = ({ steps, onMark }) => (
+  <div style={{ marginTop: 8 }}>
+    {steps.map(s => (
+      <button key={s.id} className={`v2-flow-row ${s.state}`} onClick={() => onMark(s.id, s.state === 'done' ? 'now' : 'done')} style={{ width: '100%', textAlign: 'left', border: 'none', background: 'none', cursor: 'pointer' }}>
+        <span className="v2-flow-time">{s.time}</span>
+        <span className="v2-flow-pip" aria-hidden/>
+        <span className="v2-flow-label">{s.label}</span>
+        <span style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+          {s.ai_suggested && <span className="v2-chip ultramarine"><Icon name="sparkle" size={10}/> AI-shaped</span>}
+          {s.state === 'now' && <span className="v2-chip tangerine">Now</span>}
+        </span>
+      </button>
+    ))}
+    {steps.length === 0 && <div className="muted" style={{ fontSize: 13, padding: '10px 0' }}>No flow steps set for today yet.</div>}
+  </div>
+);
 
-const AIBrief: React.FC<{ onChild: (id: string) => void }> = ({ onChild }) => (
+const AIBrief: React.FC<{ nextSteps: RealNextStep[]; childById: Map<number, RealChild>; onChild: (id: string) => void }> = ({ nextSteps, childById, onChild }) => (
   <aside className="v2-ai">
     <div className="v2-ai-sig">
       <span className="num">A</span>
-      <span>— AI brief · 08:12</span>
+      <span>— AI brief</span>
       <span className="v2-ai-spark"/>
     </div>
     <h3 className="v2-ai-headline">
-      Three things you might want to <em>try today.</em>
+      {nextSteps.length === 0 ? 'No suggestions awaiting review.' : <>Suggestions <em>awaiting your review.</em></>}
     </h3>
-    <ol className="v2-ai-list">
-      <li>
-        Pair <button onClick={() => onChild('c1')}>Amara</button> and <button onClick={() => onChild('c6')}>Theo</button> on Geometric Cabinet — Amara's mentoring showed up twice last week.
-      </li>
-      <li>
-        Shorten <button onClick={() => onChild('c2')}>Leo's</button> language cycle to 6 minutes post-snack. A gentle experiment, not a conclusion.
-      </li>
-      <li>
-        Quiet check-in with <button onClick={() => onChild('c7')}>Isla</button> this morning — third Monday withdrawal noted.
-      </li>
-    </ol>
+    {nextSteps.length > 0 && (
+      <ol className="v2-ai-list">
+        {nextSteps.slice(0, 3).map(s => {
+          const child = childById.get(s.child_id);
+          return (
+            <li key={s.id}>
+              {child ? <button onClick={() => onChild(String(child.id))}>{child.name}</button> : 'A child'} — {s.title}
+            </li>
+          );
+        })}
+      </ol>
+    )}
     <div className="v2-ai-foot">— Suggestions, not prescriptions</div>
   </aside>
 );
