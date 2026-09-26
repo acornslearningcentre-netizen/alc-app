@@ -1,149 +1,84 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Icon } from '../../components/ui';
-import { ALC_DATA } from '../../data/seed';
-import type { Tone } from '../../data/types';
-
-interface Thread {
-  id: string;
-  name: string;
-  initials: string;
-  role: 'parent' | 'colleague';
-  tone: string;
-  preview: string;
-  time: string;
-  unread: number;
-  messages: { from: 'me' | 'them'; text: string; time: string }[];
-}
-
-const THREADS: Thread[] = [
-  {
-    id: 't1', name: 'Nia Osei', initials: 'NO', role: 'parent', tone: 'sage',
-    preview: 'Thank you for the update on Amara — she came home…', time: '14:22', unread: 0,
-    messages: [
-      { from: 'me', text: "Hi Nia — just a quick note that Amara had a wonderful morning. She showed Theo the Pink Tower and stayed focused for 18 minutes.", time: '11:05' },
-      { from: 'them', text: "Thank you for the update on Amara — she came home and immediately tried to build a tower with her books! It clearly meant something to her.", time: '14:22' },
-    ]
-  },
-  {
-    id: 't2', name: 'Tom Vance', initials: 'TV', role: 'parent', tone: 'ochre',
-    preview: "He does seem tired on Mondays. We'll try an earlier\u2026", time: '13:45', unread: 1,
-    messages: [
-      { from: 'them', text: "Leo asked to read the same book three times at bedtime. Got frustrated when I tried to shorten it.", time: 'Yesterday \xb7 19:30' },
-      { from: 'me', text: "Hi Tom \u2014 that's really helpful context. Leo's attention is shorter right after snack too. Worth tracking whether it's a tiredness pattern across the week. I'll note Monday mornings especially.", time: '09:30' },
-      { from: 'them', text: "He does seem tired on Mondays. We'll try an earlier bedtime Sunday and let you know.", time: '13:45' },
-    ]
-  },
-  {
-    id: 't3', name: 'Kate Mitchell', initials: 'KM', role: 'parent', tone: 'plum',
-    preview: 'We had a difficult weekend — lots of separation…', time: '09:12', unread: 2,
-    messages: [
-      { from: 'them', text: "We had a difficult weekend — lots of separation anxiety on Sunday evening. Is Isla okay at school?", time: '09:12' },
-    ]
-  },
-  {
-    id: 't4', name: 'SENCO · Ms. Doran', initials: 'SD', role: 'colleague', tone: 'sky',
-    preview: "I've reviewed the Isla notes. Can we meet briefly\u2026", time: 'Yesterday', unread: 1,
-    messages: [
-      { from: 'me', text: "Hi \u2014 flagging Isla for your awareness. Three Monday withdrawals in a row. I've drafted an initial note. Happy to co-write the parent communication.", time: 'Yesterday \xb7 10:00' },
-      { from: 'them', text: "I've reviewed the Isla notes. Can we meet briefly Thursday after school? I'd like to hear more before we reach out to Kate.", time: 'Yesterday \xb7 14:55' },
-    ]
-  },
-];
-
-/** Find the child linked to a parent contact (matches any of the child's parents by name). */
-function findChildByParent(parentName: string) {
-  return ALC_DATA.children.find(c => c.parents.some(p => p.name === parentName));
-}
-
-/** Find the relation (Mum/Dad/Grandma/…) of a parent for their linked child. */
-function findRelation(parentName: string): string {
-  const child = findChildByParent(parentName);
-  return child?.parents.find(p => p.name === parentName)?.relation ?? 'Parent';
-}
-
-/** Build a synthetic empty thread for a parent who doesn't yet have a real one. */
-function makeSyntheticThread(parentName: string): Thread {
-  const child = findChildByParent(parentName);
-  const first = child?.name.split(' ')[0] ?? 'this child';
-  const initials = parentName.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
-  return {
-    id: `new:${parentName}`,
-    name: parentName,
-    initials,
-    role: 'parent',
-    tone: (child?.tone ?? 'sage') as Tone,
-    preview: `Start a conversation about ${first}`,
-    time: 'New',
-    unread: 0,
-    messages: [],
-  };
-}
+import { useAppStore } from '../../store/app-store';
+import { fetchThreads, fetchThreadMessages, sendThreadMessage } from '../../lib/threads-api';
+import type { RealThread, RealMessage } from '../../lib/threads-api';
+import { fetchChildren } from '../../lib/children-api';
+import type { RealChild } from '../../lib/children-api';
+import { fetchChildObservations } from '../../lib/observations-api';
+import type { RealObservation } from '../../lib/observations-api';
+import { askAssistant } from '../../lib/assistant-api';
+import { initialsFromName } from '../../lib/child-fields';
 
 interface TeacherMessagesProps {
   initialGuardianName?: string | null;
 }
 
 export const TeacherMessages: React.FC<TeacherMessagesProps> = ({ initialGuardianName }) => {
-  // Build every thread under this teacher — one per parent across all 12 children, plus colleagues.
-  const threads = useMemo<Thread[]>(() => {
-    const seedNames = new Set(THREADS.filter(t => t.role === 'parent').map(t => t.name));
-    const synthetic: Thread[] = [];
-    for (const child of ALC_DATA.children) {
-      for (const parent of child.parents) {
-        if (!seedNames.has(parent.name)) synthetic.push(makeSyntheticThread(parent.name));
-      }
-    }
-    // Colleagues first, then parents with recorded history, then the rest of the families.
-    const colleagues = THREADS.filter(t => t.role === 'colleague');
-    const activeParents = THREADS.filter(t => t.role === 'parent');
-    return [...colleagues, ...activeParents, ...synthetic];
-  }, []);
-
-  const resolveInitialId = () => {
-    if (initialGuardianName) {
-      const match = threads.find(t => t.name === initialGuardianName);
-      if (match) return match.id;
-    }
-    // Default landing: first parent thread with activity (skip colleague) so demo lands on a conversation.
-    const firstActive = threads.find(t => t.role === 'parent' && t.messages.length > 0);
-    return firstActive?.id ?? threads[0]?.id;
-  };
-
-  const [activeId, setActiveId] = useState<string>(resolveInitialId);
+  const token = useAppStore(s => s.token);
+  const [threads, setThreads] = useState<RealThread[] | null>(null);
+  const [children, setChildren] = useState<RealChild[]>([]);
+  const [activeId, setActiveId] = useState<number | null>(null);
+  const [messages, setMessages] = useState<RealMessage[]>([]);
+  const [observations, setObservations] = useState<RealObservation[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [msgLoading, setMsgLoading] = useState(false);
   const [draft, setDraft] = useState('');
   const [aiDraft, setAiDraft] = useState('');
   const [showAI, setShowAI] = useState(false);
-  /** On mobile we swap between the thread list and the selected conversation. */
-  const [mobileView, setMobileView] = useState<'list' | 'detail'>(
-    initialGuardianName ? 'detail' : 'list'
-  );
+  const [draftingAI, setDraftingAI] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [mobileView, setMobileView] = useState<'list' | 'detail'>(initialGuardianName ? 'detail' : 'list');
 
-  const selectThread = (id: string) => {
+  useEffect(() => {
+    if (!token) { setError('You need to be signed in to see your messages.'); setLoading(false); return; }
+    let cancelled = false;
+    Promise.all([fetchThreads(token), fetchChildren(token)])
+      .then(([t, c]) => {
+        if (cancelled) return;
+        setThreads(t); setChildren(c);
+        const preferred = initialGuardianName ? t.find(x => x.parent_name === initialGuardianName) : null;
+        setActiveId((preferred ?? t[0])?.id ?? null);
+        setError(null);
+      })
+      .catch((err: Error) => { if (!cancelled) setError(err.message); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [token, initialGuardianName]);
+
+  const thread = useMemo(() => threads?.find(t => t.id === activeId) ?? null, [threads, activeId]);
+  const linkedChild = useMemo(() => (thread ? children.find(c => c.id === thread.child_id) ?? null : null), [thread, children]);
+
+  useEffect(() => {
+    if (!token || !thread) { setMessages([]); setObservations([]); return; }
+    let cancelled = false;
+    setMsgLoading(true);
+    Promise.all([fetchThreadMessages(token, thread.id), fetchChildObservations(token, thread.child_id)])
+      .then(([msgs, obs]) => { if (!cancelled) { setMessages(msgs); setObservations(obs); } })
+      .catch((err: Error) => { if (!cancelled) setError(err.message); })
+      .finally(() => { if (!cancelled) setMsgLoading(false); });
+    return () => { cancelled = true; };
+  }, [token, thread]);
+
+  const selectThread = (id: number) => {
     setActiveId(id);
     setMobileView('detail');
+    setShowAI(false);
   };
 
-  // When the user clicks "Message parent" for a different child, re-select that thread.
-  useEffect(() => {
-    if (!initialGuardianName) return;
-    const match = threads.find(t => t.name === initialGuardianName);
-    if (match) {
-      setActiveId(match.id);
-      setMobileView('detail');
+  const generateDraft = async () => {
+    if (!token || !thread) return;
+    setDraftingAI(true);
+    try {
+      const result = await askAssistant(token, thread.child_id, 'Draft a short, warm note to the parent about how things are going today.');
+      const answer = result.messages.find(m => m.sender === 'assistant');
+      if (answer) { setAiDraft(answer.text); setShowAI(true); }
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setDraftingAI(false);
     }
-  }, [initialGuardianName, threads]);
-
-  const thread = threads.find(t => t.id === activeId) ?? threads[0];
-
-  const generateDraft = () => {
-    const drafts: Record<string, string> = {
-      t1: "Hi Nia — I wanted to share that Amara is showing strong spatial reasoning and a natural instinct for helping peers. We'll be introducing the Geometric Cabinet next week. I'll keep you posted.",
-      t2: "Hi Tom — thank you for the bedtime note. I've been tracking Leo's attention window and will share a short summary by Friday. A consistent Sunday bedtime could really help — great instinct.",
-      t3: "Hi Kate — thank you for letting me know. Isla has been a little quieter on Monday mornings, and I've been giving her extra space to settle. Nothing that worries me yet, but I'm watching carefully. Would a quick call this week help?",
-      t4: "Hi — confirming Thursday works. I'll bring my observation notes and the draft SENCO referral form. Isla's pattern is consistent enough that I think it's worth a gentle conversation with Kate soon.",
-    };
-    setAiDraft(drafts[activeId] || "I'd be happy to draft a response for this thread.");
-    setShowAI(true);
   };
 
   const useAIDraft = () => {
@@ -151,59 +86,58 @@ export const TeacherMessages: React.FC<TeacherMessagesProps> = ({ initialGuardia
     setShowAI(false);
   };
 
+  const send = async () => {
+    if (!token || !thread || !draft.trim()) return;
+    setSending(true);
+    try {
+      const msg = await sendThreadMessage(token, thread.id, draft.trim());
+      setMessages(m => [...m, msg]);
+      setDraft('');
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setSending(false);
+    }
+  };
+
+  if (loading) return <div className="page-fade muted" style={{ padding: 40 }}>Loading your messages…</div>;
+  if (error && !threads) return <div className="page-fade muted" style={{ padding: 40 }}>{error}</div>;
+  if (!threads || threads.length === 0) return <div className="page-fade muted" style={{ padding: 40 }}>No conversations yet — they'll appear here once you have children in your class.</div>;
+  if (!thread) return null;
+
   return (
     <div className="page-fade">
       <div className="topbar">
         <div>
           <h1>Messages</h1>
-          <div className="sub">Parent and colleague conversations · AI-assisted drafting</div>
-        </div>
-        <div className="topbar-actions">
-          <button className="btn primary"><Icon name="plus" size={13}/> New message</button>
+          <div className="sub">Parent conversations · AI-assisted drafting</div>
         </div>
       </div>
 
       <div className="grid cols-messages messages-grid" data-mobile-view={mobileView} style={{ alignItems: 'flex-start' }}>
-        {/* Thread list */}
         <div className="card" style={{ padding: 0, overflow: 'hidden', maxHeight: 720, overflowY: 'auto' }}>
-          {threads.map(t => {
-            const linkedChild = t.role === 'parent' ? findChildByParent(t.name) : null;
-            const relation = linkedChild ? findRelation(t.name) : null;
-            const childFirst = linkedChild?.name.split(' ')[0];
-            return (
-              <button key={t.id} onClick={() => selectThread(t.id)}
-                style={{ width: '100%', padding: '14px 16px', background: activeId === t.id ? 'var(--cream-2)' : 'transparent',
-                  borderBottom: '1px solid var(--line)', textAlign: 'left', display: 'flex', gap: 12, alignItems: 'flex-start',
-                  cursor: 'pointer', border: 'none', borderBottomColor: 'var(--line)', borderBottomWidth: 1, borderBottomStyle: 'solid' }}
-                aria-selected={activeId === t.id}>
-                <div className={`avatar-lg tone-${t.tone}`} style={{ width: 36, height: 36, fontSize: 12, flexShrink: 0 }}>{t.initials}</div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div className="row between" style={{ marginBottom: 3 }}>
-                    <div style={{ fontWeight: 700, fontSize: 13.5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.name}</div>
-                    <div className="muted" style={{ fontSize: 11.5, flexShrink: 0 }}>{t.time}</div>
-                  </div>
-                  <div className="row between">
-                    <div className="muted" style={{ fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 160 }}>
-                      {t.preview}
-                    </div>
-                    {t.unread > 0 && (
-                      <span style={{ width: 18, height: 18, borderRadius: '50%', background: 'var(--ink)', color: 'var(--cream)', fontSize: 10, fontWeight: 700, display: 'grid', placeItems: 'center', flexShrink: 0 }}>
-                        {t.unread}
-                      </span>
-                    )}
-                  </div>
-                  <div className="tiny" style={{ marginTop: 4 }}>
-                    {t.role === 'parent'
-                      ? (relation && childFirst ? `${relation} · ${childFirst}` : 'Parent')
-                      : 'Colleague'}
-                  </div>
+          {threads.map(t => (
+            <button key={t.id} onClick={() => selectThread(t.id)}
+              style={{ width: '100%', padding: '14px 16px', background: activeId === t.id ? 'var(--cream-2)' : 'transparent',
+                borderBottom: '1px solid var(--line)', textAlign: 'left', display: 'flex', gap: 12, alignItems: 'flex-start',
+                cursor: 'pointer', border: 'none', borderBottomColor: 'var(--line)', borderBottomWidth: 1, borderBottomStyle: 'solid' }}
+              aria-selected={activeId === t.id}>
+              <div className="avatar-lg" style={{ width: 36, height: 36, fontSize: 12, flexShrink: 0 }}>{initialsFromName(t.parent_name)}</div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div className="row between" style={{ marginBottom: 3 }}>
+                  <div style={{ fontWeight: 700, fontSize: 13.5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.parent_name}</div>
+                  {t.unread_count > 0 && (
+                    <span style={{ width: 18, height: 18, borderRadius: '50%', background: 'var(--ink)', color: 'var(--cream)', fontSize: 10, fontWeight: 700, display: 'grid', placeItems: 'center', flexShrink: 0 }}>
+                      {t.unread_count}
+                    </span>
+                  )}
                 </div>
-              </button>
-            );
-          })}
+                <div className="tiny">{t.child_name}</div>
+              </div>
+            </button>
+          ))}
         </div>
 
-        {/* Conversation */}
         <div className="card messages-detail" style={{ padding: 0, display: 'flex', flexDirection: 'column', minHeight: 540 }}>
           <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--line)' }}>
             <div className="row" style={{ gap: 12 }}>
@@ -216,32 +150,31 @@ export const TeacherMessages: React.FC<TeacherMessagesProps> = ({ initialGuardia
               >
                 <Icon name="arrow-right" size={16} stroke="var(--ink-2)" style={{ transform: 'rotate(180deg)' }}/>
               </button>
-              <div className={`avatar-lg tone-${thread.tone}`} style={{ width: 34, height: 34, fontSize: 12 }}>{thread.initials}</div>
+              <div className="avatar-lg" style={{ width: 34, height: 34, fontSize: 12 }}>{initialsFromName(thread.parent_name)}</div>
               <div>
-                <div style={{ fontWeight: 800 }}>{thread.name}</div>
-                <div className="muted" style={{ fontSize: 12 }}>
-                  {thread.role === 'parent'
-                    ? `${findRelation(thread.name)} · ${findChildByParent(thread.name)?.name ?? 'Acorns'}`
-                    : 'Colleague'}
-                </div>
+                <div style={{ fontWeight: 800 }}>{thread.parent_name}</div>
+                <div className="muted" style={{ fontSize: 12 }}>{thread.child_name}</div>
               </div>
             </div>
           </div>
 
           <div style={{ flex: 1, padding: 20, display: 'flex', flexDirection: 'column', gap: 12, overflow: 'auto', minHeight: 260 }}>
-            {thread.messages.length === 0 && (
+            {msgLoading && <div className="muted" style={{ margin: 'auto', fontSize: 13 }}>Loading conversation…</div>}
+            {!msgLoading && messages.length === 0 && (
               <div className="muted" style={{ margin: 'auto', textAlign: 'center', fontSize: 13, maxWidth: 320, lineHeight: 1.55 }}>
                 <Icon name="message" size={22} stroke="var(--ink-4)"/>
-                <div style={{ marginTop: 8, fontWeight: 700, color: 'var(--ink-2)' }}>No messages yet with {thread.name.split(' ')[0]}.</div>
+                <div style={{ marginTop: 8, fontWeight: 700, color: 'var(--ink-2)' }}>No messages yet with {thread.parent_name.split(' ')[0]}.</div>
                 <div style={{ marginTop: 4 }}>Write a warm first note below, or use AI draft to start.</div>
               </div>
             )}
-            {thread.messages.map((m, i) => (
-              <div key={i} style={{ alignSelf: m.from === 'me' ? 'flex-end' : 'flex-start', maxWidth: '78%' }}>
-                <div style={{ padding: '11px 15px', borderRadius: 16, background: m.from === 'me' ? 'var(--ink)' : 'var(--cream-2)', color: m.from === 'me' ? 'var(--cream)' : 'var(--ink)', fontSize: 13.5, lineHeight: 1.55 }}>
-                  {m.text}
+            {messages.map(m => (
+              <div key={m.id} style={{ alignSelf: m.sender_role === 'teacher' ? 'flex-end' : 'flex-start', maxWidth: '78%' }}>
+                <div style={{ padding: '11px 15px', borderRadius: 16, background: m.sender_role === 'teacher' ? 'var(--ink)' : 'var(--cream-2)', color: m.sender_role === 'teacher' ? 'var(--cream)' : 'var(--ink)', fontSize: 13.5, lineHeight: 1.55 }}>
+                  {m.body}
                 </div>
-                <div className="muted" style={{ fontSize: 11, marginTop: 4, textAlign: m.from === 'me' ? 'right' : 'left' }}>{m.time}</div>
+                <div className="muted" style={{ fontSize: 11, marginTop: 4, textAlign: m.sender_role === 'teacher' ? 'right' : 'left' }}>
+                  {new Date(m.sent_at).toLocaleString(undefined, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                </div>
               </div>
             ))}
           </div>
@@ -259,69 +192,54 @@ export const TeacherMessages: React.FC<TeacherMessagesProps> = ({ initialGuardia
 
           <div style={{ padding: 16, borderTop: '1px solid var(--line)' }}>
             <textarea value={draft} onChange={e => setDraft(e.target.value)} rows={3}
-              placeholder={`Reply to ${thread.name.split(' ')[0]}…`}
-              aria-label="Message composer"
+              placeholder={`Reply to ${thread.parent_name.split(' ')[0]}…`}
+              aria-label="Message composer" disabled={sending}
               style={{ width: '100%', padding: 12, borderRadius: 12, border: '1px solid var(--line)', background: 'var(--cream)', resize: 'none', fontSize: 13.5, lineHeight: 1.5, marginBottom: 10 }}/>
             <div className="row between">
-              <button className="btn ghost" onClick={generateDraft}><Icon name="sparkle" size={13}/> AI draft</button>
-              <div className="row" style={{ gap: 8 }}>
-                <button className="btn"><Icon name="camera" size={13}/> Attach</button>
-                <button className="btn primary" disabled={!draft.trim()}><Icon name="send" size={13}/> Send</button>
-              </div>
+              <button className="btn ghost" onClick={generateDraft} disabled={draftingAI}><Icon name="sparkle" size={13}/> {draftingAI ? 'Drafting…' : 'AI draft'}</button>
+              <button className="btn primary" onClick={send} disabled={!draft.trim() || sending}><Icon name="send" size={13}/> Send</button>
             </div>
+            {error && <div style={{ color: 'var(--danger)', fontSize: 12.5, marginTop: 8 }}>{error}</div>}
           </div>
         </div>
 
-        {/* Context panel */}
         <div className="messages-context" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          {(() => {
-            const child = findChildByParent(thread.name);
-            return child ? (
-              <div className={`card tone-${child.tone}`} style={{ padding: 16 }}>
-                <div className="tiny" style={{ marginBottom: 10 }}>Linked child</div>
-                <div className="row" style={{ gap: 10, marginBottom: 12 }}>
-                  <div className="avatar-lg" style={{ width: 32, height: 32, fontSize: 11 }}>{child.initials}</div>
-                  <div>
-                    <div style={{ fontWeight: 700 }}>{child.name}</div>
-                    <div className="muted" style={{ fontSize: 12 }}>{child.mastery}% mastery · {child.attendance}% attendance</div>
-                  </div>
-                </div>
-                <div style={{ fontSize: 12.5, lineHeight: 1.6, color: 'var(--ink-2)' }}>
-                  <strong>Strengths:</strong> {child.strengths.join(', ')}<br/>
-                  <strong>Growing:</strong> {child.gaps.join(', ')}
-                </div>
+          {linkedChild ? (
+            <div className={`card tone-${linkedChild.tone ?? 'sage'}`} style={{ padding: 16 }}>
+              <div className="tiny" style={{ marginBottom: 10 }}>Linked child</div>
+              <div className="row" style={{ gap: 10, marginBottom: 12 }}>
+                <div className="avatar-lg" style={{ width: 32, height: 32, fontSize: 11 }}>{linkedChild.initials || initialsFromName(linkedChild.name)}</div>
+                <div style={{ fontWeight: 700 }}>{linkedChild.name}</div>
               </div>
-            ) : (
-              <div className="card" style={{ padding: 16 }}>
-                <div className="tiny" style={{ marginBottom: 6 }}>Colleague</div>
-                <div style={{ fontSize: 13, color: 'var(--ink-2)' }}>Internal school communication.</div>
+              <div style={{ fontSize: 12.5, lineHeight: 1.6, color: 'var(--ink-2)' }}>
+                <strong>Strengths:</strong> {linkedChild.strengths.length ? linkedChild.strengths.join(', ') : 'None recorded yet'}<br/>
+                <strong>Growing:</strong> {linkedChild.gaps.length ? linkedChild.gaps.join(', ') : 'None recorded yet'}
               </div>
-            );
-          })()}
+            </div>
+          ) : (
+            <div className="card" style={{ padding: 16 }}>
+              <div className="tiny" style={{ marginBottom: 6 }}>Linked child</div>
+              <div style={{ fontSize: 13, color: 'var(--ink-2)' }}>Not found in your roster.</div>
+            </div>
+          )}
 
           <div className="card" style={{ padding: 16 }}>
-            <div className="tiny" style={{ marginBottom: 10 }}>Recent shared observations</div>
-            {ALC_DATA.observations.filter(o => {
-              const child = findChildByParent(thread.name);
-              return child ? o.childId === child.id : false;
-            }).slice(0, 3).map((o, i) => (
-              <div key={i} style={{ padding: '8px 0', borderBottom: i < 2 ? '1px dashed var(--line)' : 'none' }}>
-                <div style={{ fontSize: 12.5, fontWeight: 600, marginBottom: 2 }}>{o.time}</div>
-                <div className="muted" style={{ fontSize: 12, lineHeight: 1.5 }}>{o.text.slice(0, 80)}…</div>
+            <div className="tiny" style={{ marginBottom: 10 }}>Recent observations</div>
+            {observations.slice(0, 3).map((o, i) => (
+              <div key={o.id} style={{ padding: '8px 0', borderBottom: i < 2 ? '1px dashed var(--line)' : 'none' }}>
+                <div style={{ fontSize: 12.5, fontWeight: 600, marginBottom: 2 }}>{new Date(o.captured_at).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}</div>
+                <div className="muted" style={{ fontSize: 12, lineHeight: 1.5 }}>{(o.comment || o.transcript || '(no text recorded)').slice(0, 80)}</div>
               </div>
             ))}
-            {ALC_DATA.observations.filter(o => {
-              const child = findChildByParent(thread.name);
-              return child ? o.childId === child.id : false;
-            }).length === 0 && (
-              <div className="muted" style={{ fontSize: 12 }}>No recent observations for this thread.</div>
+            {observations.length === 0 && (
+              <div className="muted" style={{ fontSize: 12 }}>No recent observations for this child.</div>
             )}
           </div>
 
           <div className="card" style={{ padding: 16, background: 'var(--cream-2)' }}>
             <div className="tiny" style={{ marginBottom: 6 }}>Communication guidelines</div>
             <div style={{ fontSize: 12, lineHeight: 1.6, color: 'var(--ink-2)' }}>
-              Keep messages warm, factual, and forward-looking. SENCO referrals are always shared with families before submission.
+              Keep messages warm, factual, and forward-looking.
             </div>
           </div>
         </div>
